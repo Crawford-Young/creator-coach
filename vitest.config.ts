@@ -1,0 +1,48 @@
+import { defineConfig } from 'vitest/config'
+import tsconfigPaths from 'vite-tsconfig-paths'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [tsconfigPaths(), react()],
+  test: {
+    environment: 'happy-dom',
+    setupFiles: ['./tests/setup.ts'],
+    globals: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      thresholds: {
+        statements: 100,
+        functions: 100,
+        lines: 100,
+        branches: 97,
+      },
+      exclude: [
+        'node_modules/',
+        'tests/',
+        '.next/',
+        'coverage/',
+        'storybook-static/',
+        '.storybook/**',
+        'stories/**',
+        '**/*.stories.{ts,tsx}',
+        '**/*.config.{ts,mjs,js}',
+        'src/env.ts',
+        'src/instrumentation.ts',
+        // Infrastructure files requiring real credentials — tested via integration/E2E
+        'src/db/**',
+        'src/lib/auth.ts',
+        'src/lib/logger.ts',
+        'src/lib/redis.ts',
+        'src/lib/ui.ts',
+        // Next.js App Router files — tested via E2E / component tests
+        'src/app/**',
+        'src/middleware.ts',
+        // Auth API route
+        'src/app/api/**',
+        // Sentry config files
+        'sentry.*.config.ts',
+      ],
+    },
+  },
+})

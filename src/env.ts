@@ -1,0 +1,32 @@
+import { createEnv } from '@t3-oss/env-nextjs'
+import { z } from 'zod'
+
+export const env = createEnv({
+  server: {
+    DATABASE_URL: z.string().url(),
+    AUTH_SECRET: z.string().min(1),
+    AUTH_TWITCH_ID: z.string().min(1),
+    AUTH_TWITCH_SECRET: z.string().min(1),
+    UPSTASH_REDIS_REST_URL: z.string().url(),
+    UPSTASH_REDIS_REST_TOKEN: z.string().min(1),
+    SENTRY_DSN: z.string().url(),
+    SENTRY_AUTH_TOKEN: z.string().min(1),
+    NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  },
+  client: {
+    NEXT_PUBLIC_APP_URL: z.string().url(),
+  },
+  runtimeEnv: {
+    DATABASE_URL: process.env.DATABASE_URL,
+    AUTH_SECRET: process.env.AUTH_SECRET,
+    AUTH_TWITCH_ID: process.env.AUTH_TWITCH_ID,
+    AUTH_TWITCH_SECRET: process.env.AUTH_TWITCH_SECRET,
+    UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
+    UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
+    SENTRY_DSN: process.env.SENTRY_DSN,
+    SENTRY_AUTH_TOKEN: process.env.SENTRY_AUTH_TOKEN,
+    NODE_ENV: process.env.NODE_ENV,
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  },
+  skipValidation: !!process.env.SKIP_ENV_VALIDATION,
+})
