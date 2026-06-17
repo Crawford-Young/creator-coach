@@ -14,7 +14,9 @@
     "e2e": "playwright test",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build",
-    "prepare": "husky"
+    "prepare": "husky",
+    "db:generate": "node --env-file=.env ./node_modules/drizzle-kit/bin.cjs generate",
+    "db:migrate": "node --env-file=.env ./node_modules/drizzle-kit/bin.cjs migrate"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
