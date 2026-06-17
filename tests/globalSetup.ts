@@ -1,0 +1,35 @@
+import { resolve } from 'path'
+
+/** Placeholder values used only in tests for vars that have no real value in .env */
+const TEST_ENV_DEFAULTS: Record<string, string> = {
+  AUTH_SECRET: 'test-secret-for-unit-tests-only',
+  AUTH_TWITCH_ID: 'test-twitch-id',
+  AUTH_TWITCH_SECRET: 'test-twitch-secret',
+  UPSTASH_REDIS_REST_URL: 'https://test.upstash.io',
+  UPSTASH_REDIS_REST_TOKEN: 'test-upstash-token',
+  SENTRY_DSN: 'https://test@o0.ingest.sentry.io/0',
+  SENTRY_AUTH_TOKEN: 'test-sentry-auth-token',
+  NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
+}
+
+export async function setup(): Promise<void> {
+  // Load .env file into process.env before tests run.
+  // process.loadEnvFile is available in Node 20.12+.
+  // This ensures real credentials (DATABASE_URL etc.) are present for
+  // infrastructure tests that run in the node environment.
+  const envPath = resolve(process.cwd(), '.env')
+  try {
+    process.loadEnvFile(envPath)
+  } catch {
+    // .env may not exist in CI — env vars must be injected by the CI runner
+  }
+
+  // Fill in any vars that are still missing/empty after .env load.
+  // These placeholders are sufficient for unit tests that validate module
+  // shape — they do not make real network requests.
+  for (const [key, fallback] of Object.entries(TEST_ENV_DEFAULTS)) {
+    if (!process.env[key]) {
+      process.env[key] = fallback
+    }
+  }
+}
