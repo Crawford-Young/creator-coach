@@ -1,15 +1,28 @@
-import NextAuth from 'next-auth'
+import NextAuth, { type NextAuthConfig } from 'next-auth'
+import Twitch from 'next-auth/providers/twitch'
 import { DrizzleAdapter } from '@auth/drizzle-adapter'
 import { db } from '@/db'
+import { env } from '@/env'
 
-// Providers (e.g. Twitch) will be added in a subsequent task
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const authConfig: NextAuthConfig = {
   adapter: DrizzleAdapter(db),
-  providers: [],
+  providers: [
+    Twitch({
+      clientId: env.AUTH_TWITCH_ID,
+      clientSecret: env.AUTH_TWITCH_SECRET,
+      authorization: {
+        params: {
+          scope: 'user:read:email channel:manage:broadcast channel:read:subscriptions',
+        },
+      },
+    }),
+  ],
   session: {
     strategy: 'database',
   },
   pages: {
     signIn: '/sign-in',
   },
-})
+}
+
+export const { handlers, auth, signIn, signOut } = NextAuth(authConfig)
