@@ -3,6 +3,7 @@ import Twitch from 'next-auth/providers/twitch'
 import { DrizzleAdapter } from '@auth/drizzle-adapter'
 import { db } from '@/db'
 import { env } from '@/env'
+import { provisionCreator } from '@/lib/provision'
 
 export const authConfig: NextAuthConfig = {
   adapter: DrizzleAdapter(db),
@@ -22,6 +23,11 @@ export const authConfig: NextAuthConfig = {
   },
   pages: {
     signIn: '/sign-in',
+  },
+  events: {
+    signIn: async ({ user }) => {
+      if (user.id) await provisionCreator(user.id, user.name ?? '')
+    },
   },
 }
 
