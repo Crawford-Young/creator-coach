@@ -9,6 +9,9 @@ export default defineConfig({
     globalSetup: ['./tests/globalSetup.ts'],
     setupFiles: ['./tests/setup.ts'],
     globals: true,
+    // Multi-step form walks drive ~24 fields through userEvent; the default
+    // 5s budget is tight under happy-dom on CI, so allow extra headroom.
+    testTimeout: 15000,
     env: {
       NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
     },
