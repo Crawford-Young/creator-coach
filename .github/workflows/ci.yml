@@ -13,6 +13,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: pnpm }
+      - uses: extractions/setup-just@v2
       - run: pnpm install --frozen-lockfile
         env:
           SKIP_ENV_VALIDATION: true
@@ -37,10 +38,11 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: pnpm }
+      - uses: extractions/setup-just@v2
       - run: pnpm install --frozen-lockfile
         env:
           SKIP_ENV_VALIDATION: true
-      - run: pnpm playwright install --with-deps
+      - run: pnpm playwright install --with-deps chromium
       - run: just e2e
         env:
           SKIP_ENV_VALIDATION: true
