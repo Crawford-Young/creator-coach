@@ -1,17 +1,15 @@
 // @vitest-environment node
+import { randomUUID } from 'node:crypto'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { ObjectId } from 'mongodb'
 
 vi.mock('@/lib/auth', () => ({ auth: vi.fn() }))
-vi.mock('@/db', () => ({ db: { select: vi.fn() } }))
-vi.mock('@/db/schema', () => ({ creators: { userId: 'userId_col' } }))
-vi.mock('drizzle-orm', () => ({ eq: vi.fn((col, val) => ({ col, val })) }))
 
 import { requireCreator, UnauthorizedError } from '@/lib/tenant'
 import { auth } from '@/lib/auth'
-import { db } from '@/db'
+import { collections, type CreatorDoc } from '@/db/mongo'
 
 const mockAuth = auth as unknown as ReturnType<typeof vi.fn>
-const mockDb = db as unknown as { select: ReturnType<typeof vi.fn> }
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -24,43 +22,38 @@ describe('requireCreator', () => {
     await expect(rejection).rejects.toThrow('Not authenticated')
   })
 
-  it('throws UnauthorizedError when session exists but no creator row found', async () => {
-    mockAuth.mockResolvedValueOnce({ user: { id: 'u1' } })
-
-    mockDb.select.mockImplementationOnce(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn().mockResolvedValue([]),
-        })),
-      })),
-    }))
+  it('throws UnauthorizedError when session exists but no creator doc found', async () => {
+    const userId = randomUUID()
+    mockAuth.mockResolvedValueOnce({ user: { id: userId } })
 
     const rejection = requireCreator()
     await expect(rejection).rejects.toThrow(UnauthorizedError)
     await expect(rejection).rejects.toThrow('No creator tenant for user')
   })
 
-  it('returns the creator row when authenticated and creator exists', async () => {
-    const creatorRow = {
-      id: 'c1',
-      userId: 'u1',
+  it('returns the mapped creator when authenticated and creator doc exists', async () => {
+    const userId = randomUUID()
+    const createdAt = new Date()
+    const doc: CreatorDoc = {
+      _id: new ObjectId(),
+      userId,
       displayName: 'Streamer',
       timezone: 'UTC',
       platforms: ['twitch'],
-      createdAt: new Date(),
+      createdAt,
     }
+    await collections().creators.insertOne(doc)
 
-    mockAuth.mockResolvedValueOnce({ user: { id: 'u1' } })
-
-    mockDb.select.mockImplementationOnce(() => ({
-      from: vi.fn(() => ({
-        where: vi.fn(() => ({
-          limit: vi.fn().mockResolvedValue([creatorRow]),
-        })),
-      })),
-    }))
+    mockAuth.mockResolvedValueOnce({ user: { id: userId } })
 
     const result = await requireCreator()
-    expect(result).toEqual(creatorRow)
+    expect(result).toEqual({
+      id: doc._id.toHexString(),
+      userId,
+      displayName: 'Streamer',
+      timezone: 'UTC',
+      platforms: ['twitch'],
+      createdAt,
+    })
   })
 })
