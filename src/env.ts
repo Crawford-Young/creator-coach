@@ -3,7 +3,11 @@ import { z } from 'zod'
 
 export const env = createEnv({
   server: {
-    MONGODB_URI: z.string().url(),
+    // Not .url(): multi-host seedlist URIs (mongodb://h1:p,h2:p,…) are legal
+    // connection strings but fail WHATWG URL parsing.
+    MONGODB_URI: z
+      .string()
+      .regex(/^mongodb(\+srv)?:\/\//, 'must be a mongodb:// or mongodb+srv:// URI'),
     MONGODB_DB: z.string().min(1).default('creator-coach'),
     AUTH_SECRET: z.string().min(1),
     AUTH_TWITCH_ID: z.string().min(1),
