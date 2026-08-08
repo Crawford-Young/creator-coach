@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.9.0",
+    "@auth/mongodb-adapter": "^3.11.3",
     "@crawfordyoung/ui": "^0.10.0",
     "@neondatabase/serverless": "^0.10.4",
     "@sentry/nextjs": "^9.25.0",
@@ -40,6 +41,7 @@
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.43.1",
     "lucide-react": "^0.511.0",
+    "mongodb": "^6.21.0",
     "next": "^15.3.3",
     "next-auth": "^5.0.0-beta.29",
     "next-themes": "^0.4.6",
@@ -79,6 +81,7 @@
     "happy-dom": "^17.5.6",
     "husky": "^9.1.7",
     "lint-staged": "^15.5.2",
+    "mongodb-memory-server": "^11.2.0",
     "msw": "^2.8.7",
     "pino-pretty": "^13.0.0",
     "playwright": "^1.52.0",

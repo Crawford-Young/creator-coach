@@ -1,4 +1,7 @@
 import { resolve } from 'path'
+import { MongoMemoryServer } from 'mongodb-memory-server'
+
+let mongod: MongoMemoryServer | undefined
 
 /** Placeholder values used only in tests for vars that have no real value in .env */
 const TEST_ENV_DEFAULTS: Record<string, string> = {
@@ -32,4 +35,14 @@ export async function setup(): Promise<void> {
       process.env[key] = fallback
     }
   }
+
+  // Start an in-memory MongoDB instance for infrastructure tests that talk
+  // to a real database. Overrides any MONGODB_URI/MONGODB_DB loaded above.
+  mongod = await MongoMemoryServer.create()
+  process.env.MONGODB_URI = mongod.getUri()
+  process.env.MONGODB_DB = 'creator-coach-test'
+}
+
+export async function teardown(): Promise<void> {
+  await mongod?.stop()
 }
