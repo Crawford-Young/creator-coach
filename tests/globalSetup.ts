@@ -8,8 +8,6 @@ const TEST_ENV_DEFAULTS: Record<string, string> = {
   AUTH_SECRET: 'test-secret-for-unit-tests-only',
   AUTH_TWITCH_ID: 'test-twitch-id',
   AUTH_TWITCH_SECRET: 'test-twitch-secret',
-  UPSTASH_REDIS_REST_URL: 'https://test.upstash.io',
-  UPSTASH_REDIS_REST_TOKEN: 'test-upstash-token',
   SENTRY_DSN: 'https://test@o0.ingest.sentry.io/0',
   SENTRY_AUTH_TOKEN: 'test-sentry-auth-token',
   NEXT_PUBLIC_APP_URL: 'http://localhost:3000',

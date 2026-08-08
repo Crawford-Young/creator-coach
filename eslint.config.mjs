@@ -12,6 +12,17 @@ const compat = new FlatCompat({
 })
 
 const eslintConfig = [
+  // Raw `eslint .` (no `next lint` wrapper) scans build artifacts without this —
+  // .next/ + next-env.d.ts regenerate on every dev run. Mirrors .prettierignore.
+  {
+    ignores: [
+      '.next/**',
+      'next-env.d.ts',
+      'coverage/**',
+      'playwright-report/**',
+      'test-results/**',
+    ],
+  },
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
   {
     plugins: {
