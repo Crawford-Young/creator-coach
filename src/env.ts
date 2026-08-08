@@ -9,8 +9,10 @@ export const env = createEnv({
     AUTH_TWITCH_SECRET: z.string().min(1),
     UPSTASH_REDIS_REST_URL: z.string().url(),
     UPSTASH_REDIS_REST_TOKEN: z.string().min(1),
-    SENTRY_DSN: z.string().url(),
-    SENTRY_AUTH_TOKEN: z.string().min(1),
+    // Production-only: a missing DSN makes Sentry a no-op locally, and the
+    // auth token is only used for source-map upload at build time in CI.
+    SENTRY_DSN: z.string().url().optional(),
+    SENTRY_AUTH_TOKEN: z.string().min(1).optional(),
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   },
   client: {
