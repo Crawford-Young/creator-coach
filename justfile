@@ -18,11 +18,5 @@ typecheck:
 
 check: lint typecheck test e2e
 
-storybook:
-    pnpm storybook dev -p 6006
-
-storybook-build:
-    pnpm storybook build
-
 db-indexes:
     node --env-file=.env scripts/db-indexes.mjs

@@ -23,9 +23,6 @@ coverage/
 playwright-report/
 test-results/
 
-# Storybook build
-storybook-static/
-
 # Logs
 *.log
 pnpm-debug.log*
