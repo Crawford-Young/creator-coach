@@ -1,16 +1,14 @@
 // @vitest-environment node
+import { randomUUID } from 'node:crypto'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/lib/tenant', () => ({ requireCreator: vi.fn() }))
-vi.mock('@/db', () => ({ db: { insert: vi.fn() } }))
-vi.mock('@/db/schema', () => ({ personaProfiles: { creatorId: 'creator_id_col' } }))
 
 import { savePersonaProfile } from '@/lib/actions/persona'
 import { requireCreator } from '@/lib/tenant'
-import { db } from '@/db'
+import { collections } from '@/db/mongo'
 
 const mockRequireCreator = requireCreator as unknown as ReturnType<typeof vi.fn>
-const mockDb = db as unknown as { insert: ReturnType<typeof vi.fn> }
 
 const validProfile = {
   identity: { mainDraw: 'community heart', archetype: 'community-heart' },
@@ -43,48 +41,58 @@ const validProfile = {
 beforeEach(() => vi.clearAllMocks())
 
 describe('savePersonaProfile', () => {
-  it('rejects invalid payload and does not call db.insert', async () => {
-    mockRequireCreator.mockResolvedValueOnce({ id: 'cr1' })
+  it('rejects an invalid payload and does not insert a document', async () => {
+    const creatorId = randomUUID()
+    mockRequireCreator.mockResolvedValueOnce({ id: creatorId })
 
     await expect(savePersonaProfile({})).rejects.toThrow()
 
-    expect(mockDb.insert).not.toHaveBeenCalled()
+    await expect(collections().personaProfiles.countDocuments({ creatorId })).resolves.toBe(0)
   })
 
-  it('upserts scoped to the session creator on valid input', async () => {
-    mockRequireCreator.mockResolvedValueOnce({ id: 'cr1' })
-
-    const mockOnConflictDoUpdate = vi.fn().mockResolvedValue(undefined)
-    const mockValues = vi.fn(() => ({ onConflictDoUpdate: mockOnConflictDoUpdate }))
-    mockDb.insert.mockReturnValueOnce({ values: mockValues })
+  it('upserts a document scoped to the session creator on valid input', async () => {
+    const creatorId = randomUUID()
+    mockRequireCreator.mockResolvedValueOnce({ id: creatorId })
 
     const result = await savePersonaProfile(validProfile)
 
     expect(result).toEqual({ ok: true })
-    expect(mockValues).toHaveBeenCalledWith(
-      expect.objectContaining({
-        creatorId: 'cr1',
-        archetype: 'community-heart',
-        timezone: 'Europe/London',
-        data: expect.objectContaining({ identity: expect.anything() }),
-      }),
-    )
-    expect(mockOnConflictDoUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        target: expect.anything(),
-        set: expect.objectContaining({
-          updatedAt: expect.any(Date),
-        }),
-      }),
-    )
+    const doc = await collections().personaProfiles.findOne({ creatorId })
+    expect(doc).not.toBeNull()
+    expect(doc?.creatorId).toBe(creatorId)
+    expect(doc?.archetype).toBe('community-heart')
+    expect(doc?.timezone).toBe('Europe/London')
+    expect(doc?.data).toEqual(validProfile)
   })
 
-  it('propagates auth failure and does not call db.insert', async () => {
+  it('is idempotent for a second save by the same creator — updates the single document in place', async () => {
+    const creatorId = randomUUID()
+    mockRequireCreator.mockResolvedValue({ id: creatorId })
+
+    await savePersonaProfile(validProfile)
+    const first = await collections().personaProfiles.findOne({ creatorId })
+
+    const updatedProfile = {
+      ...validProfile,
+      philosophy: { ...validProfile.philosophy, statement: 'community first' },
+    }
+    await savePersonaProfile(updatedProfile)
+    const second = await collections().personaProfiles.findOne({ creatorId })
+
+    await expect(collections().personaProfiles.countDocuments({ creatorId })).resolves.toBe(1)
+    expect(second?.data.philosophy.statement).toBe('community first')
+    expect(second?.createdAt).toEqual(first?.createdAt)
+    expect(second?.updatedAt.getTime()).toBeGreaterThan(first?.updatedAt.getTime() ?? 0)
+  })
+
+  it('propagates a requireCreator failure and does not insert a document', async () => {
     const authError = new Error('Not authenticated')
     mockRequireCreator.mockRejectedValueOnce(authError)
+    const before = await collections().personaProfiles.countDocuments()
 
     await expect(savePersonaProfile(validProfile)).rejects.toThrow('Not authenticated')
 
-    expect(mockDb.insert).not.toHaveBeenCalled()
+    const after = await collections().personaProfiles.countDocuments()
+    expect(after).toBe(before)
   })
 })
