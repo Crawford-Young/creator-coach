@@ -8,7 +8,7 @@ AI-powered creator coaching companion — multi-tenant Next.js application.
 - **Language**: TypeScript (strict)
 - **Styling**: Tailwind CSS + dark mode (next-themes)
 - **UI**: `@crawfordyoung/ui` via `@/lib/ui`
-- **Database**: Neon (serverless PostgreSQL) + Drizzle ORM
+- **Database**: MongoDB Atlas + native driver
 - **Auth**: Auth.js v5 with Twitch OAuth
 - **Rate limiting**: Upstash Redis
 - **Error monitoring**: Sentry
@@ -18,7 +18,8 @@ AI-powered creator coaching companion — multi-tenant Next.js application.
 ## Getting Started
 
 1. Copy `.env.example` to `.env` and fill in values:
-   - `DATABASE_URL` — Neon connection string
+   - `MONGODB_URI` — Atlas connection string
+   - `MONGODB_DB` — database name (defaults to `creator-coach`)
    - `AUTH_SECRET` — `openssl rand -base64 32`
    - `AUTH_TWITCH_ID` / `AUTH_TWITCH_SECRET` — Twitch OAuth app credentials
    - `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` — Upstash dashboard
@@ -38,15 +39,13 @@ AI-powered creator coaching companion — multi-tenant Next.js application.
 
 ## Commands
 
-| Command            | Description                |
-| ------------------ | -------------------------- |
-| `just dev`         | Start dev server           |
-| `just test`        | Run Vitest with coverage   |
-| `just e2e`         | Run Playwright E2E tests   |
-| `just lint`        | ESLint + Prettier check    |
-| `just typecheck`   | TypeScript type check      |
-| `just check`       | Run all checks             |
-| `just storybook`   | Start Storybook            |
-| `just migrate-gen` | Generate Drizzle migration |
-| `just migrate`     | Apply Drizzle migrations   |
-| `just db-studio`   | Open Drizzle Studio        |
+| Command           | Description              |
+| ----------------- | ------------------------ |
+| `just dev`        | Start dev server         |
+| `just test`       | Run Vitest with coverage |
+| `just e2e`        | Run Playwright E2E tests |
+| `just lint`       | ESLint + Prettier check  |
+| `just typecheck`  | TypeScript type check    |
+| `just check`      | Run all checks           |
+| `just storybook`  | Start Storybook          |
+| `just db-indexes` | Create MongoDB indexes   |

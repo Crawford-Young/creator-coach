@@ -7,7 +7,7 @@ vi.mock('@/lib/tenant', () => ({ requireCreator: vi.fn() }))
 
 import { getPersonaProfile } from '@/lib/persona/get'
 import { requireCreator } from '@/lib/tenant'
-import { collections } from '@/db/mongo'
+import { collections } from '@/db'
 import { personaProfileSchema } from '@/lib/persona/schema'
 
 const mockRequireCreator = requireCreator as unknown as ReturnType<typeof vi.fn>

@@ -1,6 +1,6 @@
 'use server'
 
-import { collections } from '@/db/mongo'
+import { collections } from '@/db'
 import { requireCreator } from '@/lib/tenant'
 import { personaProfileSchema } from '@/lib/persona/schema'
 

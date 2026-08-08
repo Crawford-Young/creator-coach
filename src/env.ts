@@ -3,7 +3,6 @@ import { z } from 'zod'
 
 export const env = createEnv({
   server: {
-    DATABASE_URL: z.string().url(),
     MONGODB_URI: z.string().url(),
     MONGODB_DB: z.string().min(1).default('creator-coach'),
     AUTH_SECRET: z.string().min(1),
@@ -21,7 +20,6 @@ export const env = createEnv({
     NEXT_PUBLIC_APP_URL: z.string().url(),
   },
   runtimeEnv: {
-    DATABASE_URL: process.env.DATABASE_URL,
     MONGODB_URI: process.env.MONGODB_URI,
     MONGODB_DB: process.env.MONGODB_DB,
     AUTH_SECRET: process.env.AUTH_SECRET,

@@ -1,7 +1,7 @@
 import NextAuth, { type NextAuthConfig } from 'next-auth'
 import Twitch from 'next-auth/providers/twitch'
 import { MongoDBAdapter } from '@auth/mongodb-adapter'
-import { getClient } from '@/db/mongo'
+import { getClient } from '@/db'
 import { env } from '@/env'
 import { provisionCreator } from '@/lib/provision'
 

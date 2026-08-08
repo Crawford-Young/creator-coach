@@ -44,11 +44,12 @@ export default defineConfig({
         'src/lib/ui.ts',
         // Next.js App Router files — tested via E2E / component tests
         'src/app/**',
-        'src/middleware.ts',
         // Auth API route
         'src/app/api/**',
         // Sentry config files
         'sentry.*.config.ts',
+        // Standalone ops script — requires a live MongoDB connection, no unit test
+        'scripts/**',
       ],
     },
   },
