@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { collections } from '@/db/mongo'
+import { collections } from '@/db'
 import { provisionCreator } from '@/lib/provision'
 
 describe('provisionCreator', () => {

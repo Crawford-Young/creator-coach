@@ -1,5 +1,5 @@
 import { ObjectId } from 'mongodb'
-import { collections, toCreator, type Creator, type CreatorDoc } from '@/db/mongo'
+import { collections, toCreator, type Creator, type CreatorDoc } from '@/db'
 
 const DEFAULT_DISPLAY_NAME = 'Creator'
 const TWITCH_PLATFORM = 'twitch'

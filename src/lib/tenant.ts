@@ -1,5 +1,5 @@
 import { auth } from '@/lib/auth'
-import { collections, toCreator, type Creator } from '@/db/mongo'
+import { collections, toCreator, type Creator } from '@/db'
 
 export class UnauthorizedError extends Error {
   constructor(message = 'Not authenticated') {

@@ -7,7 +7,7 @@ vi.mock('@/lib/auth', () => ({ auth: vi.fn() }))
 
 import { requireCreator, UnauthorizedError } from '@/lib/tenant'
 import { auth } from '@/lib/auth'
-import { collections, type CreatorDoc } from '@/db/mongo'
+import { collections, type CreatorDoc } from '@/db'
 
 const mockAuth = auth as unknown as ReturnType<typeof vi.fn>
 

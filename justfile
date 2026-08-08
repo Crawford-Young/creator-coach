@@ -24,11 +24,5 @@ storybook:
 storybook-build:
     pnpm storybook build
 
-migrate:
-    pnpm drizzle-kit migrate
-
-migrate-gen:
-    pnpm drizzle-kit generate
-
-db-studio:
-    pnpm drizzle-kit studio
+db-indexes:
+    node --env-file=.env scripts/db-indexes.mjs

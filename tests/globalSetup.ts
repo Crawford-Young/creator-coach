@@ -18,7 +18,7 @@ const TEST_ENV_DEFAULTS: Record<string, string> = {
 export async function setup(): Promise<void> {
   // Load .env file into process.env before tests run.
   // process.loadEnvFile is available in Node 20.12+.
-  // This ensures real credentials (DATABASE_URL etc.) are present for
+  // This ensures real credentials (MONGODB_URI etc.) are present for
   // infrastructure tests that run in the node environment.
   const envPath = resolve(process.cwd(), '.env')
   try {
