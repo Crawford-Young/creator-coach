@@ -1,7 +1,5 @@
-import { eq } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
-import { db } from '@/db'
-import { creators } from '@/db/schema'
+import { collections, toCreator, type Creator } from '@/db/mongo'
 
 export class UnauthorizedError extends Error {
   constructor(message = 'Not authenticated') {
@@ -10,14 +8,10 @@ export class UnauthorizedError extends Error {
   }
 }
 
-export async function requireCreator(): Promise<typeof creators.$inferSelect> {
+export async function requireCreator(): Promise<Creator> {
   const session = await auth()
   if (!session?.user?.id) throw new UnauthorizedError()
-  const [creator] = await db
-    .select()
-    .from(creators)
-    .where(eq(creators.userId, session.user.id))
-    .limit(1)
-  if (!creator) throw new UnauthorizedError('No creator tenant for user')
-  return creator
+  const doc = await collections().creators.findOne({ userId: session.user.id })
+  if (!doc) throw new UnauthorizedError('No creator tenant for user')
+  return toCreator(doc)
 }
