@@ -17,7 +17,13 @@ const securityHeaders = [
       "font-src 'self'",
       "object-src 'none'",
       "base-uri 'self'",
-      "form-action 'self'",
+      // Chrome enforces form-action on the WHOLE redirect chain of a form
+      // submission: the sign-in form posts to self, 302s to Twitch's authorize
+      // page, and (when not already logged into Twitch) 302s again to the
+      // twitch.tv login page — every host in that chain must be allow-listed
+      // or the browser silently blocks the submission. Chrome's console error
+      // names the original action URL, not the violating hop.
+      "form-action 'self' https://id.twitch.tv https://www.twitch.tv",
       "frame-ancestors 'none'",
       'upgrade-insecure-requests',
     ].join('; '),

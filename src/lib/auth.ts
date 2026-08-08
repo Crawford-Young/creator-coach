@@ -13,16 +13,16 @@ export const authConfig: NextAuthConfig = {
       clientSecret: env.AUTH_TWITCH_SECRET,
       authorization: {
         params: {
-          scope: 'user:read:email channel:manage:broadcast channel:read:subscriptions',
+          // openid is required: the provider is OIDC, and overriding `scope`
+          // replaces (not extends) the default `openid user:read:email` set —
+          // without it Twitch omits id_token and the callback route 500s.
+          scope: 'openid user:read:email channel:manage:broadcast channel:read:subscriptions',
         },
       },
     }),
   ],
   session: {
     strategy: 'database',
-  },
-  pages: {
-    signIn: '/sign-in',
   },
   events: {
     signIn: async ({ user }) => {

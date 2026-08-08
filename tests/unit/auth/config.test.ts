@@ -38,5 +38,8 @@ describe('auth config', () => {
     expect(scope).toContain('channel:manage:broadcast')
     expect(scope).toContain('user:read:email')
     expect(scope).toContain('channel:read:subscriptions')
+    // The provider is OIDC: dropping the default `openid` scope makes Twitch
+    // omit id_token and the callback dies "id_token property must be a string".
+    expect(scope).toContain('openid')
   })
 })
