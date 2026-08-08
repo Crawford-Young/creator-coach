@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import tsconfigPaths from 'vite-tsconfig-paths'
 import react from '@vitejs/plugin-react'
 
@@ -9,6 +9,8 @@ export default defineConfig({
     globalSetup: ['./tests/globalSetup.ts'],
     setupFiles: ['./tests/setup.ts'],
     globals: true,
+    // Playwright specs live under tests/e2e and must never be collected by vitest.
+    exclude: [...configDefaults.exclude, 'tests/e2e/**'],
     // Multi-step form walks drive ~24 fields through userEvent; the default
     // 5s budget is tight under happy-dom on CI, so allow extra headroom.
     testTimeout: 15000,

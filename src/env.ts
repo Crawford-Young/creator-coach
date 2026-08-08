@@ -33,4 +33,7 @@ export const env = createEnv({
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   },
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
+  // A present-but-empty line in .env (e.g. `SENTRY_AUTH_TOKEN=`) must behave as
+  // unset — otherwise optional vars fail their .min(1)/.url() checks on "".
+  emptyStringAsUndefined: true,
 })
