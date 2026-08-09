@@ -14,12 +14,12 @@ export const env = createEnv({
     AUTH_TWITCH_SECRET: z.string().min(1),
     // Production-only: a missing DSN makes Sentry a no-op locally, and the
     // auth token is only used for source-map upload at build time in CI.
-    SENTRY_DSN: z.string().url().optional(),
+    SENTRY_DSN: z.url().optional(),
     SENTRY_AUTH_TOKEN: z.string().min(1).optional(),
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   },
   client: {
-    NEXT_PUBLIC_APP_URL: z.string().url(),
+    NEXT_PUBLIC_APP_URL: z.url(),
   },
   runtimeEnv: {
     MONGODB_URI: process.env.MONGODB_URI,
