@@ -44,6 +44,7 @@ function mockFetchSequence(responses: FetchFixture[]): ReturnType<typeof vi.fn> 
       ok: res.ok ?? true,
       status: res.status ?? 200,
       json: async () => res.body,
+      text: async () => JSON.stringify(res.body),
     }))
   }
   vi.stubGlobal('fetch', fetchMock)

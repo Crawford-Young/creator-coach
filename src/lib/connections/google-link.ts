@@ -142,8 +142,12 @@ export async function handleGoogleCallback(params: HandleGoogleCallbackParams): 
     headers: { Authorization: `Bearer ${token.access_token}` },
   })
   if (!channelsResponse.ok) {
+    // Google's error body names the failure reason (accessNotConfigured,
+    // quotaExceeded, …) and the project number — without it a 403 is
+    // undiagnosable from the log alone.
+    const errorBody = await channelsResponse.text()
     logger.warn(
-      { creatorId, status: channelsResponse.status },
+      { creatorId, status: channelsResponse.status, errorBody },
       'handleGoogleCallback: channel lookup failed',
     )
     throw new ChannelLookupError()

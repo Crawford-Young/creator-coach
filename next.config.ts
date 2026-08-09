@@ -23,7 +23,11 @@ const securityHeaders = [
       // twitch.tv login page — every host in that chain must be allow-listed
       // or the browser silently blocks the submission. Chrome's console error
       // names the original action URL, not the violating hop.
-      "form-action 'self' https://id.twitch.tv https://www.twitch.tv",
+      // auth.twitch.tv: the consent/verification hop Twitch inserts when a
+      // sign-in requests NEW scopes (surfaced at W1 re-auth for
+      // moderator:read:followers — already-authorized sign-ins skip it, which
+      // is why a two-host list passed W0 QA).
+      "form-action 'self' https://id.twitch.tv https://www.twitch.tv https://auth.twitch.tv",
       "frame-ancestors 'none'",
       'upgrade-insecure-requests',
     ].join('; '),

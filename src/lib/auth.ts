@@ -27,10 +27,10 @@ export const authConfig: NextAuthConfig = {
     strategy: 'database',
   },
   events: {
-    signIn: async ({ user }) => {
+    signIn: async ({ user, account }) => {
       if (user.id) {
         await provisionCreator(user.id, user.name ?? '')
-        await syncTwitchAccount(user.id, user.name ?? '')
+        await syncTwitchAccount(user.id, user.name ?? '', account)
       }
     },
   },
