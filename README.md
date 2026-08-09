@@ -4,12 +4,13 @@ AI-powered creator coaching companion — multi-tenant Next.js application.
 
 ## Stack
 
-- **Framework**: Next.js 15 (App Router)
+- **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript (strict)
 - **Styling**: Tailwind CSS + dark mode (next-themes)
 - **UI**: `@crawfordyoung/ui` via `@/lib/ui`
 - **Database**: MongoDB Atlas + native `mongodb` driver v6 (no ODM — Zod validates documents)
 - **Auth**: Auth.js v5 with Twitch OAuth (`@auth/mongodb-adapter`, database sessions)
+- **Platform connectors**: Twitch Helix + YouTube Data/Analytics ingestion (see below)
 - **Error monitoring**: Sentry
 - **Testing**: Vitest + Playwright (E2E on `mongodb-memory-server`)
 - **Deployment**: Vercel
@@ -24,6 +25,9 @@ AI-powered creator coaching companion — multi-tenant Next.js application.
    | `MONGODB_DB`                            | Database name (defaults to `creator-coach`)                                                                                                                                                                                                                                                                                                                                                                                     |
    | `AUTH_SECRET`                           | `openssl rand -base64 32`                                                                                                                                                                                                                                                                                                                                                                                                       |
    | `AUTH_TWITCH_ID` / `AUTH_TWITCH_SECRET` | Twitch OAuth app credentials (redirect URL: `<origin>/api/auth/callback/twitch`)                                                                                                                                                                                                                                                                                                                                                |
+   | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google Cloud OAuth 2.0 Web client for the YouTube link flow (redirect URI: `<origin>/api/connections/google/callback`; enable YouTube Data API v3 + YouTube Analytics API)                                                                                                                                                                                                                                                      |
+   | `TOKEN_ENC_KEY`                         | 32-byte base64 key encrypting platform tokens at rest — `openssl rand -base64 32`                                                                                                                                                                                                                                                                                                                                               |
+   | `CRON_SECRET`                           | Bearer token guarding `/api/cron/*` — `openssl rand -base64 32`. Also a GitHub Actions secret (live-poll workflow) and a Vercel env var at deploy.                                                                                                                                                                                                                                                                              |
    | `SENTRY_DSN` / `SENTRY_AUTH_TOKEN`      | Optional — Sentry project                                                                                                                                                                                                                                                                                                                                                                                                       |
    | `NEXT_PUBLIC_APP_URL`                   | Your app URL                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
@@ -57,6 +61,25 @@ AI-powered creator coaching companion — multi-tenant Next.js application.
 | `just typecheck`  | TypeScript type check                        |
 | `just check`      | Run all checks (lint, typecheck, test, e2e)  |
 | `just db-indexes` | Create MongoDB unique indexes (reads `.env`) |
+
+## Connector architecture (W1)
+
+Platform data flows through a shared connector contract (`src/lib/connectors/types.ts`):
+
+- **`PlatformConnector`** — `syncChannel` (channel-level metric snapshot), `syncContent` (upsert content items), `syncMetrics` (per-item metric snapshots). Implemented by `twitchConnector` (`src/lib/connectors/twitch.ts`) and `youtubeConnector` (`src/lib/connectors/youtube.ts`); `checkLive` (Twitch CCV) is a standalone export.
+- **Tokens** are encrypted at rest (`src/lib/token-crypto.ts`, `v1:` AES-256-GCM format) and refreshed through `getFreshTwitchToken`/`getFreshGoogleToken` (`src/lib/connectors/token-refresh.ts`). A provider 401 forces one refresh-and-retry; a second 401 is a hard error. When the refresh grant itself is rejected, `ReauthRequiredError` flips the account to `reauth_required` and reports to Sentry — callers just skip the account.
+- **Storage**: `contentItems` upserts on the unique `(platform, externalId)` index; `metricSnapshots` is a native MongoDB **time-series** collection (no upserts, no unique indexes possible) — idempotency is query-before-insert, owned by each writer.
+- **YouTube backfill**: linking a Google account fires `backfillYouTubeChannel` (fire-and-forget from the OAuth callback) — full channel-history day series from the YouTube Analytics API, chunked 365 days per request, skipping days already present so re-linking never duplicates the series.
+
+### Cron / live-poll ops
+
+- **Daily ingest** — Vercel cron (`vercel.json`) hits `GET /api/cron/daily-ingest` at 06:00 UTC: every active account gets `syncChannel` + `syncContent` + `syncMetrics` (50 newest items). Accounts are isolated — one failure never blocks siblings; the route returns a per-account summary.
+- **Live poll** — GitHub Actions (`.github/workflows/live-poll.yml`) curls `GET /api/cron/live-poll` every 10 minutes (best-effort — GH scheduler drift is expected): Twitch accounts get a `checkLive` CCV snapshot while streaming. Requires repo secret `CRON_SECRET` + repo variable `APP_URL`.
+- Both routes require `Authorization: Bearer <CRON_SECRET>` (constant-time compare) and 401 otherwise.
+
+### Weekly Google re-link ritual
+
+The Google OAuth app runs in **Testing** status, so refresh tokens expire every 7 days. When YouTube sync starts failing with `reauth_required`, re-link via `/api/connections/google/start` — the backfill's skip-existing-days idempotency makes re-linking safe.
 
 ## E2E pattern
 
