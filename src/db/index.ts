@@ -103,6 +103,11 @@ export interface MetricSnapshotDoc {
     watchTimeMin?: number
     avgViewDurationSec?: number
     ccv?: number
+    // ORCHESTRATOR AMENDMENT (W1 T9): the YouTube Analytics reports.query
+    // day-series exposes this as a day-delta metric (subscribers gained
+    // that day, can be negative) — distinct from `subscribers`, the
+    // point-in-time channel total from channels.list statistics.
+    subscribersGained?: number
   }
 }
 

@@ -5,6 +5,16 @@ import { ObjectId } from 'mongodb'
 import { collections, type CreatorDoc } from '@/db'
 import { decryptToken, isEncrypted } from '@/lib/token-crypto'
 import { env } from '@/env'
+
+vi.mock('@/lib/ingest/youtube-backfill', () => ({
+  backfillYouTubeChannel: vi.fn().mockResolvedValue({ daysWritten: 0, daysSkipped: 0, chunks: 0 }),
+}))
+vi.mock('@sentry/nextjs', () => ({
+  captureException: vi.fn(),
+}))
+
+import * as Sentry from '@sentry/nextjs'
+import { backfillYouTubeChannel } from '@/lib/ingest/youtube-backfill'
 import {
   buildGoogleAuthUrl,
   generateState,
@@ -75,8 +85,14 @@ async function seedCreator(
   return { creatorId: _id.toHexString(), userId }
 }
 
+async function flushMicrotasks(): Promise<void> {
+  await new Promise((resolve) => setImmediate(resolve))
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.mocked(backfillYouTubeChannel).mockClear()
+  vi.mocked(Sentry.captureException).mockClear()
 })
 
 describe('generateState', () => {
@@ -117,6 +133,7 @@ describe('handleGoogleCallback', () => {
       handleGoogleCallback({ code: 'abc', state: 'a', stateCookie: 'b', creatorId }),
     ).rejects.toThrow(StateMismatchError)
     expect(fetchMock).not.toHaveBeenCalled()
+    expect(backfillYouTubeChannel).not.toHaveBeenCalled()
 
     const doc = await collections().platformAccounts.findOne({ creatorId, platform: 'youtube' })
     expect(doc).toBeNull()
@@ -130,6 +147,7 @@ describe('handleGoogleCallback', () => {
       handleGoogleCallback({ code: 'abc', state: 'a', stateCookie: '', creatorId }),
     ).rejects.toThrow(StateMismatchError)
     expect(fetchMock).not.toHaveBeenCalled()
+    expect(backfillYouTubeChannel).not.toHaveBeenCalled()
   })
 
   it('links youtube on the happy path: encrypts tokens, sets fields, adds the platform exactly once', async () => {
@@ -155,6 +173,15 @@ describe('handleGoogleCallback', () => {
     const creator = await collections().creators.findOne({ _id: new ObjectId(creatorId) })
     expect(creator?.platforms).toEqual(expect.arrayContaining(['twitch', 'youtube']))
 
+    // Fire-and-forget backfill: invoked with the just-upserted account doc
+    // (re-fetched, since updateOne's upsert doesn't return it), not awaited
+    // by handleGoogleCallback itself.
+    expect(backfillYouTubeChannel).toHaveBeenCalledTimes(1)
+    expect(backfillYouTubeChannel).toHaveBeenCalledWith(
+      expect.objectContaining({ creatorId, platform: 'youtube', externalId: 'yt-channel-1' }),
+    )
+    await flushMicrotasks() // let the .then() handler execute for coverage
+
     // Second link for the same creator must not duplicate the platform entry.
     mockFetchSequence([{ body: fixtureTokenResponse() }, { body: fixtureChannelsResponse() }])
     await handleGoogleCallback({ code: 'abc', state: 's', stateCookie: 's', creatorId })
@@ -172,6 +199,7 @@ describe('handleGoogleCallback', () => {
       handleGoogleCallback({ code: 'abc', state: 's', stateCookie: 's', creatorId }),
     ).rejects.toThrow(ScopeDeniedError)
     expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(backfillYouTubeChannel).not.toHaveBeenCalled()
 
     const doc = await collections().platformAccounts.findOne({ creatorId, platform: 'youtube' })
     expect(doc).toBeNull()
@@ -243,6 +271,7 @@ describe('handleGoogleCallback', () => {
     await expect(
       handleGoogleCallback({ code: 'abc', state: 's', stateCookie: 's', creatorId }),
     ).rejects.toThrow(TokenExchangeError)
+    expect(backfillYouTubeChannel).not.toHaveBeenCalled()
 
     const doc = await collections().platformAccounts.findOne({ creatorId, platform: 'youtube' })
     expect(doc).toBeNull()
@@ -255,6 +284,7 @@ describe('handleGoogleCallback', () => {
     await expect(
       handleGoogleCallback({ code: 'abc', state: 's', stateCookie: 's', creatorId }),
     ).rejects.toThrow(ChannelLookupError)
+    expect(backfillYouTubeChannel).not.toHaveBeenCalled()
 
     const doc = await collections().platformAccounts.findOne({ creatorId, platform: 'youtube' })
     expect(doc).toBeNull()
@@ -270,6 +300,7 @@ describe('handleGoogleCallback', () => {
     await expect(
       handleGoogleCallback({ code: 'abc', state: 's', stateCookie: 's', creatorId }),
     ).rejects.toThrow(ChannelLookupError)
+    expect(backfillYouTubeChannel).not.toHaveBeenCalled()
 
     const doc = await collections().platformAccounts.findOne({ creatorId, platform: 'youtube' })
     expect(doc).toBeNull()
@@ -282,6 +313,7 @@ describe('handleGoogleCallback', () => {
     await expect(
       handleGoogleCallback({ code: 'abc', state: 's', stateCookie: 's', creatorId }),
     ).rejects.toThrow()
+    expect(backfillYouTubeChannel).not.toHaveBeenCalled()
 
     const doc = await collections().platformAccounts.findOne({ creatorId, platform: 'youtube' })
     expect(doc).toBeNull()
@@ -297,9 +329,25 @@ describe('handleGoogleCallback', () => {
     await expect(
       handleGoogleCallback({ code: 'abc', state: 's', stateCookie: 's', creatorId }),
     ).rejects.toThrow()
+    expect(backfillYouTubeChannel).not.toHaveBeenCalled()
 
     const doc = await collections().platformAccounts.findOne({ creatorId, platform: 'youtube' })
     expect(doc).toBeNull()
+  })
+
+  it('reports a backfill failure to Sentry without failing the link callback', async () => {
+    const { creatorId } = await seedCreator()
+    mockFetchSequence([{ body: fixtureTokenResponse() }, { body: fixtureChannelsResponse() }])
+    vi.mocked(backfillYouTubeChannel).mockRejectedValueOnce(new Error('backfill boom'))
+
+    await handleGoogleCallback({ code: 'abc', state: 's', stateCookie: 's', creatorId })
+    await flushMicrotasks() // let the .catch() handler execute for coverage
+
+    expect(backfillYouTubeChannel).toHaveBeenCalledTimes(1)
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1)
+
+    const doc = await collections().platformAccounts.findOne({ creatorId, platform: 'youtube' })
+    expect(doc).not.toBeNull()
   })
 
   it('does not overwrite a stored refreshToken/tokenExpiresAt when a re-consent omits them', async () => {

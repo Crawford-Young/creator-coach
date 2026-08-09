@@ -1,9 +1,11 @@
 import { randomBytes } from 'crypto'
 import { ObjectId } from 'mongodb'
 import { z } from 'zod'
+import * as Sentry from '@sentry/nextjs'
 import { collections, type PlatformAccountDoc } from '@/db'
 import { encryptToken } from '@/lib/token-crypto'
 import { logger } from '@/lib/logger'
+import { backfillYouTubeChannel } from '@/lib/ingest/youtube-backfill'
 import { env } from '@/env'
 
 export const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
@@ -188,4 +190,19 @@ export async function handleGoogleCallback(params: HandleGoogleCallbackParams): 
     { _id: new ObjectId(creatorId) },
     { $addToSet: { platforms: YOUTUBE_PLATFORM } },
   )
+
+  // Fire-and-forget: a multi-year historical backfill must not add its
+  // latency to the OAuth callback response. updateOne's upsert doesn't
+  // return the written doc, so re-fetch it first.
+  const linkedAccount = await platformAccounts.findOne({ creatorId, platform: YOUTUBE_PLATFORM })
+  if (linkedAccount) {
+    backfillYouTubeChannel(linkedAccount)
+      .then((result) => {
+        logger.info({ creatorId, ...result }, 'handleGoogleCallback: backfill complete')
+      })
+      .catch((error: unknown) => {
+        Sentry.captureException(error)
+        logger.warn({ creatorId }, 'handleGoogleCallback: backfill failed')
+      })
+  }
 }
