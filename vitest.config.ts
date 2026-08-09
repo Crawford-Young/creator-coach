@@ -20,6 +20,10 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
+      // vitest 4 removed coverage.all — without an explicit include, only
+      // files loaded during the run are reported, silently narrowing the
+      // 100% thresholds to whatever the tests happen to import.
+      include: ['src/**'],
       thresholds: {
         statements: 100,
         functions: 100,
