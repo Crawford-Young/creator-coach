@@ -1,9 +1,9 @@
 import { dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { fixupConfigRules } from '@eslint/compat'
 import nextCoreWebVitals from 'eslint-config-next/core-web-vitals'
 import nextTypescript from 'eslint-config-next/typescript'
 import jsxA11y from 'eslint-plugin-jsx-a11y'
-import tseslint from 'typescript-eslint'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -22,8 +22,10 @@ const eslintConfig = [
   },
   // eslint-config-next 16 ships native flat configs — FlatCompat over the
   // legacy 'next/*' names throws on the plugin objects' circular references.
-  ...nextCoreWebVitals,
-  ...nextTypescript,
+  // fixupConfigRules: eslint-plugin-react 7.37.5 (bundled by config-next)
+  // still calls context.getFilename, removed in eslint 10.
+  ...fixupConfigRules(nextCoreWebVitals),
+  ...fixupConfigRules(nextTypescript),
   {
     // eslint-config-next 16 registers the jsx-a11y plugin itself — redefining
     // it here with our own instance is a flat-config error. Rule IDs resolve
@@ -52,9 +54,9 @@ const eslintConfig = [
         tsconfigRootDir: __dirname,
       },
     },
-    plugins: {
-      '@typescript-eslint': tseslint.plugin,
-    },
+    // No plugins key: eslint-config-next/typescript already registers
+    // @typescript-eslint (wrapped by fixupConfigRules — re-registering our
+    // own instance is a redefine error). Rule IDs resolve by name.
     rules: {
       // Type-only imports/exports are erased at compile time — keeps builds fast
       // and works with verbatimModuleSyntax
