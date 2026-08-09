@@ -1,0 +1,20 @@
+{
+  "id": "vid001",
+  "snippet": {
+    "title": "Test Video One",
+    "publishedAt": "2026-01-15T12:00:00Z",
+    "thumbnails": {
+      "default": { "url": "https://i.ytimg.com/vi/vid001/default.jpg" },
+      "medium": { "url": "https://i.ytimg.com/vi/vid001/mqdefault.jpg" },
+      "high": { "url": "https://i.ytimg.com/vi/vid001/hqdefault.jpg" }
+    }
+  },
+  "statistics": {
+    "viewCount": "1000",
+    "likeCount": "50",
+    "commentCount": "5"
+  },
+  "contentDetails": {
+    "duration": "PT4M13S"
+  }
+}

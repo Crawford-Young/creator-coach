@@ -1,0 +1,13 @@
+{
+  "id": "vid002",
+  "snippet": {
+    "title": "Test Video Two",
+    "publishedAt": "2026-01-16T12:00:00Z"
+  },
+  "statistics": {
+    "viewCount": "500"
+  },
+  "contentDetails": {
+    "duration": "PT2M0S"
+  }
+}

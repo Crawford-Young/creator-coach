@@ -1,0 +1,7 @@
+{
+  "items": [
+    { "snippet": { "resourceId": { "videoId": "vid001" } } },
+    { "snippet": { "resourceId": { "videoId": "vid002" } } }
+  ],
+  "nextPageToken": "PAGE2TOKEN"
+}
