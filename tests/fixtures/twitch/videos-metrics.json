@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "id": "vod-1",
+      "stream_id": "",
+      "user_id": "bcaster123",
+      "user_login": "bcaster",
+      "user_name": "Bcaster",
+      "title": "VOD One",
+      "description": "First vod",
+      "created_at": "2026-08-01T12:00:00Z",
+      "published_at": "2026-08-01T12:05:00Z",
+      "url": "https://www.twitch.tv/videos/vod-1",
+      "thumbnail_url": "https://example.com/vod-1.jpg",
+      "viewable": "public",
+      "view_count": 1234,
+      "language": "en",
+      "type": "archive",
+      "duration": "1h2m3s",
+      "muted_segments": null
+    }
+  ],
+  "pagination": {}
+}

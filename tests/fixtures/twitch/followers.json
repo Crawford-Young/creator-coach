@@ -1,0 +1,12 @@
+{
+  "total": 42,
+  "data": [
+    {
+      "user_id": "11111",
+      "user_login": "follower1",
+      "user_name": "Follower1",
+      "followed_at": "2024-01-01T00:00:00Z"
+    }
+  ],
+  "pagination": {}
+}

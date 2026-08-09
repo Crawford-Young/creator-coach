@@ -1,0 +1,21 @@
+{
+  "data": [
+    {
+      "id": "stream-1",
+      "user_id": "bcaster123",
+      "user_login": "bcaster",
+      "user_name": "Bcaster",
+      "game_id": "12345",
+      "game_name": "Just Chatting",
+      "type": "live",
+      "title": "Live now",
+      "viewer_count": 88,
+      "started_at": "2026-08-09T10:00:00Z",
+      "language": "en",
+      "thumbnail_url": "https://example.com/thumb.jpg",
+      "tag_ids": [],
+      "tags": ["English"],
+      "is_mature": false
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "data": [
+    {
+      "id": "clip-2",
+      "url": "https://clips.twitch.tv/clip-2",
+      "embed_url": "https://clips.twitch.tv/embed?clip=clip-2",
+      "broadcaster_id": "bcaster123",
+      "broadcaster_name": "Bcaster",
+      "creator_id": "44444",
+      "creator_name": "Clipper2",
+      "video_id": "vod-2",
+      "game_id": "12345",
+      "language": "en",
+      "title": "Another Great Clip",
+      "view_count": 33,
+      "created_at": "2026-08-06T12:00:00Z",
+      "thumbnail_url": "https://example.com/clip-2.jpg",
+      "duration": 15.0,
+      "vod_offset": 200
+    }
+  ],
+  "pagination": {}
+}
