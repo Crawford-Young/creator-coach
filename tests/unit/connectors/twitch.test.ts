@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ObjectId } from 'mongodb'
-import { collections, ensureTimeseries, type ContentItemDoc, type PlatformAccountDoc } from '@/db'
+import { collections, type ContentItemDoc, type PlatformAccountDoc } from '@/db'
 import { decryptToken, encryptToken } from '@/lib/token-crypto'
 import { env } from '@/env'
 
@@ -144,25 +144,9 @@ async function seedContentItem(
   return doc
 }
 
-// metricSnapshots is a native time-series collection (src/db/index.ts) that
-// must exist BEFORE any insertOne — an insert into a not-yet-created
-// collection auto-creates it as a plain collection, which then makes any
-// concurrent test file's ensureTimeseries() fail with "already exists".
-// Vitest runs test files in parallel workers with no guaranteed order, so
-// this must not rely on another file (db-model.test.ts) winning the race.
-//
-// ensureTimeseries() itself has a check-then-create race (src/db/index.ts,
-// out of this task's scope) when two files call it concurrently — tolerate
-// "already exists" here: it means a concurrent caller already created it,
-// which is exactly what this beforeAll wants.
-beforeAll(async () => {
-  try {
-    await ensureTimeseries()
-  } catch (error) {
-    const isNamespaceExists = error instanceof Error && /already exists/i.test(error.message)
-    if (!isNamespaceExists) throw error
-  }
-})
+// metricSnapshots must exist as a time-series collection before any insert —
+// tests/globalSetup.ts pre-creates it once, before all parallel workers, so
+// no per-suite ordering guard is needed here.
 
 afterEach(() => {
   vi.unstubAllGlobals()
