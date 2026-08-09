@@ -1,0 +1,7 @@
+allowBuilds:
+  '@sentry/cli': true
+  esbuild: true
+  mongodb-memory-server: true
+  msw: true
+  sharp: true
+  unrs-resolver: true

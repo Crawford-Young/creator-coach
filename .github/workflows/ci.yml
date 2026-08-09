@@ -9,9 +9,9 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with: { node-version: 20, cache: pnpm }
       - uses: extractions/setup-just@v2
       - run: pnpm install --frozen-lockfile
@@ -22,21 +22,19 @@ jobs:
       - run: just test
         env:
           SKIP_ENV_VALIDATION: true
-      # pnpm ≤10 audit hits npm's retired endpoints (HTTP 410 since 2026-07-14);
-      # --pm-on-fail=ignore bypasses pnpm@11's packageManager-pin refusal.
-      # Non-blocking until the dependency-housekeeping PR clears the June-era
-      # high/critical set (fixes are majors: next 16, vitest 4, happy-dom 20) —
-      # remove continue-on-error in that PR.
-      - run: pnpm dlx pnpm@11 --pm-on-fail=ignore audit --audit-level=high
+      # Non-blocking until the majors in this housekeeping wave land (next 16,
+      # vitest 4, happy-dom 20 clear the audit set) — continue-on-error removed
+      # at the wave's final task.
+      - run: pnpm audit --audit-level=high
         continue-on-error: true
 
   e2e:
     runs-on: ubuntu-latest
     needs: check
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with: { node-version: 20, cache: pnpm }
       - uses: extractions/setup-just@v2
       - run: pnpm install --frozen-lockfile
