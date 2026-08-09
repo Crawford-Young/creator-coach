@@ -15,6 +15,10 @@ vi.mock('@/lib/provision', () => ({
   provisionCreator: vi.fn().mockResolvedValue(undefined),
 }))
 
+vi.mock('@/lib/connections/twitch-sync', () => ({
+  syncTwitchAccount: vi.fn().mockResolvedValue(undefined),
+}))
+
 import { authConfig } from '@/lib/auth'
 import { provisionCreator } from '@/lib/provision'
 
