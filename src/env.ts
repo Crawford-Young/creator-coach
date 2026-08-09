@@ -12,6 +12,7 @@ export const env = createEnv({
     AUTH_SECRET: z.string().min(1),
     AUTH_TWITCH_ID: z.string().min(1),
     AUTH_TWITCH_SECRET: z.string().min(1),
+    TOKEN_ENC_KEY: z.string().min(1),
     // Production-only: a missing DSN makes Sentry a no-op locally, and the
     // auth token is only used for source-map upload at build time in CI.
     SENTRY_DSN: z.url().optional(),
@@ -27,6 +28,7 @@ export const env = createEnv({
     AUTH_SECRET: process.env.AUTH_SECRET,
     AUTH_TWITCH_ID: process.env.AUTH_TWITCH_ID,
     AUTH_TWITCH_SECRET: process.env.AUTH_TWITCH_SECRET,
+    TOKEN_ENC_KEY: process.env.TOKEN_ENC_KEY,
     SENTRY_DSN: process.env.SENTRY_DSN,
     SENTRY_AUTH_TOKEN: process.env.SENTRY_AUTH_TOKEN,
     NODE_ENV: process.env.NODE_ENV,

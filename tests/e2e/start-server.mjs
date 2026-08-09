@@ -23,6 +23,9 @@ const dev = spawn('pnpm', ['dev'], {
     // SKIP_ENV_VALIDATION lets the server boot — locally .env supplied this,
     // which is exactly why the gap only ever failed in CI.
     AUTH_SECRET: 'e2e-placeholder-secret-not-production',
+    // Must decode to exactly 32 bytes — src/env.ts only checks non-empty, but
+    // token-crypto's own length check runs at server boot via other modules.
+    TOKEN_ENC_KEY: Buffer.alloc(32, 1).toString('base64'),
   },
 })
 dev.on('exit', (code) => {
