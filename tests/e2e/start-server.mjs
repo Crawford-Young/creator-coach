@@ -28,6 +28,10 @@ const dev = spawn('pnpm', ['dev'], {
     // Must decode to exactly 32 bytes — src/env.ts only checks non-empty, but
     // token-crypto's own length check runs at server boot via other modules.
     TOKEN_ENC_KEY: Buffer.alloc(32, 1).toString('base64'),
+    // Same class as AUTH_SECRET above: local e2e boots WITHOUT
+    // SKIP_ENV_VALIDATION and reads `.env` directly — a checkout whose
+    // `.env` lacks CRON_SECRET fails env validation at boot.
+    CRON_SECRET: 'e2e-placeholder-cron-secret',
   },
 })
 dev.on('exit', (code) => {

@@ -1,4 +1,4 @@
-import { MongoClient, type Db, type Collection, type ObjectId } from 'mongodb'
+import { MongoClient, MongoServerError, type Db, type Collection, type ObjectId } from 'mongodb'
 import { env } from '@/env'
 import type { PersonaProfile } from '@/lib/persona/schema'
 
@@ -161,22 +161,30 @@ export async function ensureIndexes(): Promise<void> {
 }
 
 const METRIC_SNAPSHOTS_COLLECTION = 'metricSnapshots'
+const NAMESPACE_EXISTS_ERROR_CODE = 48
 
-// Native time-series collection for metricSnapshots. Idempotent: a second
-// createCollection call on an already-existing collection throws, so every
-// call checks listCollections first — this guards `just db-indexes` and
-// ensureTimeseries() being run more than once against the same database.
+function isNamespaceExistsError(error: unknown): boolean {
+  return error instanceof MongoServerError && error.code === NAMESPACE_EXISTS_ERROR_CODE
+}
+
+// Native time-series collection for metricSnapshots. Idempotent AND
+// concurrency-safe: a listCollections pre-check would leave a
+// check-then-create window where two concurrent callers (parallel vitest
+// workers, simultaneous `just db-indexes` runs) both see "absent" and one
+// crashes — so this creates unconditionally and swallows only
+// NamespaceExists, the server's own "already created" verdict.
 export async function ensureTimeseries(): Promise<void> {
-  const db = getDb()
-  const existing = await db.listCollections({ name: METRIC_SNAPSHOTS_COLLECTION }).toArray()
-  if (existing.length > 0) {
-    return
+  try {
+    await getDb().createCollection(METRIC_SNAPSHOTS_COLLECTION, {
+      timeseries: {
+        timeField: 'capturedAt',
+        metaField: 'meta',
+        granularity: 'hours',
+      },
+    })
+  } catch (error) {
+    if (!isNamespaceExistsError(error)) {
+      throw error
+    }
   }
-  await db.createCollection(METRIC_SNAPSHOTS_COLLECTION, {
-    timeseries: {
-      timeField: 'capturedAt',
-      metaField: 'meta',
-      granularity: 'hours',
-    },
-  })
 }

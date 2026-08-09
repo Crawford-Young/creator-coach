@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { randomUUID } from 'node:crypto'
-import { describe, expect, it } from 'vitest'
-import { ObjectId } from 'mongodb'
+import { describe, expect, it, vi } from 'vitest'
+import { Db, ObjectId } from 'mongodb'
 import {
   collections,
   ensureIndexes,
@@ -42,6 +42,15 @@ describe('W1 stats data model', () => {
   it('ensureTimeseries is idempotent — a second call does not throw', async () => {
     await ensureTimeseries()
     await expect(ensureTimeseries()).resolves.not.toThrow()
+  })
+
+  it('ensureTimeseries rethrows non-NamespaceExists createCollection errors', async () => {
+    const spy = vi.spyOn(Db.prototype, 'createCollection').mockRejectedValueOnce(new Error('boom'))
+    try {
+      await expect(ensureTimeseries()).rejects.toThrow('boom')
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('rejects a duplicate (creatorId, platform) platformAccounts insert', async () => {
