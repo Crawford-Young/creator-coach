@@ -35,7 +35,7 @@
 ## Scaffold status
 
 - **Storybook removed in W0** (zero stories, preview build dead on SB8.6 + Next 15.5). W2 re-adds Storybook 9 with the first dashboard component — restore the `just storybook` recipe + DoD story requirement then.
-- CI `pnpm audit` step runs `pnpm dlx pnpm@11 --pm-on-fail=ignore audit` with `continue-on-error: true` — remove the escape hatch in the dep-housekeeping PR (42 open vulns are all fix-by-major-bump).
+- CI `pnpm audit --audit-level=high` is blocking (escape hatch removed in the dep-housekeeping wave, 2026-08-09). Transitive pins live in `pnpm-workspace.yaml` `overrides` (pnpm 11 dropped the package.json `pnpm` field) — currently `fast-uri: 3.1.5` via the sentry→webpack chain; drop when the chain floors it.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
