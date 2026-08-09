@@ -27,7 +27,7 @@
     "@auth/mongodb-adapter": "^3.11.3",
     "@crawfordyoung/ui": "^0.10.0",
     "@sentry/nextjs": "^9.25.0",
-    "@t3-oss/env-nextjs": "^0.13.3",
+    "@t3-oss/env-nextjs": "^0.13.11",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "@vitejs/plugin-react": "^4.7.0",
@@ -42,7 +42,7 @@
     "react-dom": "^19.1.0",
     "sonner": "^2.0.5",
     "tailwind-merge": "^3.3.0",
-    "zod": "^3.25.51"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",
