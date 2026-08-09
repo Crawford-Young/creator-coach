@@ -42,6 +42,7 @@ export default defineConfig({
         '**/*.config.{ts,mjs,js}',
         'src/env.ts',
         'src/instrumentation.ts',
+        'src/instrumentation-client.ts',
         // Infrastructure files requiring real credentials — tested via integration/E2E
         'src/db/**',
         'src/lib/auth.ts',
