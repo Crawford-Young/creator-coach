@@ -8,6 +8,8 @@ const TEST_ENV_DEFAULTS: Record<string, string> = {
   AUTH_SECRET: 'test-secret-for-unit-tests-only',
   AUTH_TWITCH_ID: 'test-twitch-id',
   AUTH_TWITCH_SECRET: 'test-twitch-secret',
+  AUTH_GOOGLE_ID: 'test-google-id',
+  AUTH_GOOGLE_SECRET: 'test-google-secret',
   TOKEN_ENC_KEY: Buffer.alloc(32, 2).toString('base64'),
   SENTRY_DSN: 'https://test@o0.ingest.sentry.io/0',
   SENTRY_AUTH_TOKEN: 'test-sentry-auth-token',
