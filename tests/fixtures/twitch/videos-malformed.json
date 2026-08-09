@@ -1,0 +1,28 @@
+{
+  "data": [
+    {
+      "id": "vod-good",
+      "stream_id": "",
+      "user_id": "bcaster123",
+      "user_login": "bcaster",
+      "user_name": "Bcaster",
+      "title": "Good VOD",
+      "description": "Well-formed",
+      "created_at": "2026-08-04T00:00:00Z",
+      "published_at": "2026-08-04T00:05:00Z",
+      "url": "https://www.twitch.tv/videos/vod-good",
+      "thumbnail_url": "https://example.com/vod-good.jpg",
+      "viewable": "public",
+      "view_count": 10,
+      "language": "en",
+      "type": "archive",
+      "duration": "10m0s",
+      "muted_segments": null
+    },
+    {
+      "id": "vod-bad",
+      "title": "Missing required fields — should be skipped, not crash the run"
+    }
+  ],
+  "pagination": {}
+}

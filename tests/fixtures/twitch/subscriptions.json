@@ -1,0 +1,21 @@
+{
+  "data": [
+    {
+      "broadcaster_id": "bcaster123",
+      "broadcaster_login": "bcaster",
+      "broadcaster_name": "Bcaster",
+      "gifter_id": "",
+      "gifter_login": "",
+      "gifter_name": "",
+      "is_gift": false,
+      "plan_name": "Channel Subscription",
+      "tier": "1000",
+      "user_id": "22222",
+      "user_name": "Subber",
+      "user_login": "subber"
+    }
+  ],
+  "total": 7,
+  "points": 8,
+  "pagination": {}
+}
