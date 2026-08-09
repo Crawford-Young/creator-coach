@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "statistics": {
+        "subscriberCount": "12345",
+        "viewCount": "987654",
+        "videoCount": "42"
+      },
+      "contentDetails": {
+        "relatedPlaylists": {
+          "uploads": "UUfixtureUploadsPlaylistId"
+        }
+      }
+    }
+  ]
+}

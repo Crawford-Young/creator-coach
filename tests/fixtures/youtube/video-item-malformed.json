@@ -1,0 +1,10 @@
+{
+  "id": "vid-bad",
+  "snippet": {
+    "title": "Malformed Video",
+    "publishedAt": "2026-01-17T12:00:00Z"
+  },
+  "contentDetails": {
+    "duration": "PT1M0S"
+  }
+}
