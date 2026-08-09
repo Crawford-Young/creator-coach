@@ -14,7 +14,17 @@ vi.mock('next-auth', () => ({
   })),
 }))
 
+vi.mock('@/lib/provision', () => ({
+  provisionCreator: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('@/lib/connections/twitch-sync', () => ({
+  syncTwitchAccount: vi.fn().mockResolvedValue(undefined),
+}))
+
 import { authConfig } from '@/lib/auth'
+import { provisionCreator } from '@/lib/provision'
+import { syncTwitchAccount } from '@/lib/connections/twitch-sync'
 
 describe('auth config', () => {
   it('registers the twitch provider', () => {
@@ -41,5 +51,22 @@ describe('auth config', () => {
     // The provider is OIDC: dropping the default `openid` scope makes Twitch
     // omit id_token and the callback dies "id_token property must be a string".
     expect(scope).toContain('openid')
+    expect(scope).toContain('moderator:read:followers')
+  })
+  it('signIn event provisions the creator then syncs the twitch account', async () => {
+    const callOrder: string[] = []
+    vi.mocked(provisionCreator).mockImplementationOnce(async () => {
+      callOrder.push('provision')
+      return undefined as never
+    })
+    vi.mocked(syncTwitchAccount).mockImplementationOnce(async () => {
+      callOrder.push('sync')
+    })
+
+    await authConfig.events?.signIn?.({ user: { id: 'u1', name: 'Streamer' } } as never)
+
+    expect(provisionCreator).toHaveBeenCalledWith('u1', 'Streamer')
+    expect(syncTwitchAccount).toHaveBeenCalledWith('u1', 'Streamer')
+    expect(callOrder).toEqual(['provision', 'sync'])
   })
 })

@@ -34,6 +34,20 @@ export type Platform = 'twitch' | 'youtube' | 'tiktok' | 'instagram'
 export type PlatformAccountStatus = 'active' | 'reauth_required' | 'disconnected'
 export type ContentType = 'video' | 'short' | 'vod' | 'clip' | 'stream'
 
+export interface AuthAccountDoc {
+  _id: ObjectId
+  userId: ObjectId // adapter format.to stores ObjectId, not the hex string
+  provider: string
+  providerAccountId: string
+  type: string
+  access_token?: string
+  refresh_token?: string
+  expires_at?: number // epoch seconds
+  scope?: string
+  token_type?: string
+  id_token?: string
+}
+
 export interface PlatformAccountDoc {
   _id: ObjectId
   creatorId: string // hex string per repo ObjectId contract
@@ -109,6 +123,7 @@ export function collections(): {
   platformAccounts: Collection<PlatformAccountDoc>
   contentItems: Collection<ContentItemDoc>
   metricSnapshots: Collection<MetricSnapshotDoc>
+  authAccounts: Collection<AuthAccountDoc>
 } {
   const db = getDb()
   return {
@@ -117,6 +132,7 @@ export function collections(): {
     platformAccounts: db.collection<PlatformAccountDoc>('platformAccounts'),
     contentItems: db.collection<ContentItemDoc>('contentItems'),
     metricSnapshots: db.collection<MetricSnapshotDoc>('metricSnapshots'),
+    authAccounts: db.collection<AuthAccountDoc>('accounts'),
   }
 }
 
