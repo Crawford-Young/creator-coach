@@ -19,6 +19,8 @@ const dev = spawn('pnpm', ['dev'], {
     MONGODB_DB: 'creator-coach-e2e',
     AUTH_TWITCH_ID: 'e2e-placeholder-client-id',
     AUTH_TWITCH_SECRET: 'e2e-placeholder-client-secret',
+    AUTH_GOOGLE_ID: 'e2e-placeholder-google-client-id',
+    AUTH_GOOGLE_SECRET: 'e2e-placeholder-google-client-secret',
     // CI has no .env, and Auth.js throws MissingSecret at runtime even when
     // SKIP_ENV_VALIDATION lets the server boot — locally .env supplied this,
     // which is exactly why the gap only ever failed in CI.
