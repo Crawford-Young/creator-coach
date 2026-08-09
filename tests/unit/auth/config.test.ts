@@ -53,7 +53,7 @@ describe('auth config', () => {
     expect(scope).toContain('openid')
     expect(scope).toContain('moderator:read:followers')
   })
-  it('signIn event provisions the creator then syncs the twitch account', async () => {
+  it('signIn event provisions the creator then syncs the twitch account with the event account', async () => {
     const callOrder: string[] = []
     vi.mocked(provisionCreator).mockImplementationOnce(async () => {
       callOrder.push('provision')
@@ -62,11 +62,12 @@ describe('auth config', () => {
     vi.mocked(syncTwitchAccount).mockImplementationOnce(async () => {
       callOrder.push('sync')
     })
+    const account = { provider: 'twitch', providerAccountId: 'ext-1', type: 'oauth' } as never
 
-    await authConfig.events?.signIn?.({ user: { id: 'u1', name: 'Streamer' } } as never)
+    await authConfig.events?.signIn?.({ user: { id: 'u1', name: 'Streamer' }, account } as never)
 
     expect(provisionCreator).toHaveBeenCalledWith('u1', 'Streamer')
-    expect(syncTwitchAccount).toHaveBeenCalledWith('u1', 'Streamer')
+    expect(syncTwitchAccount).toHaveBeenCalledWith('u1', 'Streamer', account)
     expect(callOrder).toEqual(['provision', 'sync'])
   })
 })
