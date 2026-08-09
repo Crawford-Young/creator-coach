@@ -1,15 +1,12 @@
 import { dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { FlatCompat } from '@eslint/eslintrc'
+import nextCoreWebVitals from 'eslint-config-next/core-web-vitals'
+import nextTypescript from 'eslint-config-next/typescript'
 import jsxA11y from 'eslint-plugin-jsx-a11y'
 import tseslint from 'typescript-eslint'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-})
 
 const eslintConfig = [
   // Raw `eslint .` (no `next lint` wrapper) scans build artifacts without this —
@@ -23,11 +20,14 @@ const eslintConfig = [
       'test-results/**',
     ],
   },
-  ...compat.extends('next/core-web-vitals', 'next/typescript'),
+  // eslint-config-next 16 ships native flat configs — FlatCompat over the
+  // legacy 'next/*' names throws on the plugin objects' circular references.
+  ...nextCoreWebVitals,
+  ...nextTypescript,
   {
-    plugins: {
-      'jsx-a11y': jsxA11y,
-    },
+    // eslint-config-next 16 registers the jsx-a11y plugin itself — redefining
+    // it here with our own instance is a flat-config error. Rule IDs resolve
+    // against the registration next's config already made.
     rules: {
       ...jsxA11y.flatConfigs.recommended.rules,
       // Every switch has a default; non-empty cases must terminate
