@@ -1,3 +1,10 @@
+# fast-uri: transitive via @sentry/nextjs > webpack > schema-utils > ajv;
+# GHSA-v2hh-gcrm-f6hx / GHSA-7p8r-x3mc-p8w7 / GHSA-4c8g-83qw-93j6 patched at
+# 3.1.5. Exact pin inside ajv's ^3 range (4.x would exceed it). Drop when the
+# sentry chain floors it.
+overrides:
+  fast-uri: 3.1.5
+
 allowBuilds:
   '@sentry/cli': true
   esbuild: true

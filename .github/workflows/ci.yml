@@ -22,11 +22,7 @@ jobs:
       - run: just test
         env:
           SKIP_ENV_VALIDATION: true
-      # Non-blocking until the majors in this housekeeping wave land (next 16,
-      # vitest 4, happy-dom 20 clear the audit set) — continue-on-error removed
-      # at the wave's final task.
       - run: pnpm audit --audit-level=high
-        continue-on-error: true
 
   e2e:
     runs-on: ubuntu-latest
