@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
-        with: { node-version: 20, cache: pnpm }
+        with: { node-version: 22, cache: pnpm }
       - uses: extractions/setup-just@v2
       - run: pnpm install --frozen-lockfile
         env:
@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
-        with: { node-version: 20, cache: pnpm }
+        with: { node-version: 22, cache: pnpm }
       - uses: extractions/setup-just@v2
       - run: pnpm install --frozen-lockfile
         env:
