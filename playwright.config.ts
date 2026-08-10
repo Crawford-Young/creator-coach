@@ -10,6 +10,9 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:3000',
     trace: 'on-first-retry',
+    // CI runs UTC; dashboard day-series fixtures straddling UTC midnight would
+    // render differently there without a pinned zone.
+    timezoneId: 'America/New_York',
   },
   projects: [
     {

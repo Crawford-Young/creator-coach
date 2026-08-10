@@ -31,6 +31,10 @@
   --input: hsl(240 5.9% 90%);
   --ring: hsl(240 10% 3.9%);
   --radius: 0.5rem;
+  /* Chart series palette — CVD-validated 2026-08-10 (dataviz validate_palette.js,
+     six checks PASS per theme). Fixed platform order, never cycled. */
+  --series-twitch: #772ce8;
+  --series-youtube: #cc0000;
 }
 
 .dark {
@@ -53,6 +57,8 @@
   --border: hsl(240 3.7% 15.9%);
   --input: hsl(240 3.7% 15.9%);
   --ring: hsl(240 4.9% 83.9%);
+  --series-twitch: #a970ff;
+  --series-youtube: #ef4444;
 }
 
 @theme inline {

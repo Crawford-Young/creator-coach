@@ -35,6 +35,14 @@ const securityHeaders = [
 ]
 
 const nextConfig: NextConfig = {
+  images: {
+    // Content thumbnails ingested in W1: YouTube (i.ytimg.com) and Twitch
+    // VOD/clip CDN (static-cdn.jtvnw.net). CSP img-src already allows https:.
+    remotePatterns: [
+      { protocol: 'https', hostname: 'i.ytimg.com' },
+      { protocol: 'https', hostname: 'static-cdn.jtvnw.net' },
+    ],
+  },
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }]
   },
