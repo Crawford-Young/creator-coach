@@ -10,6 +10,12 @@ test:
 e2e:
     pnpm playwright test
 
+storybook:
+    pnpm storybook
+
+storybook-build:
+    pnpm build-storybook
+
 lint:
     pnpm eslint . && pnpm prettier --check .
 

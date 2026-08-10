@@ -18,6 +18,7 @@ const eslintConfig = [
       'coverage/**',
       'playwright-report/**',
       'test-results/**',
+      'storybook-static/**',
     ],
   },
   // eslint-config-next 16 ships native flat configs — FlatCompat over the
