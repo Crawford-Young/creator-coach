@@ -9,7 +9,18 @@ vi.mock('@sentry/nextjs', () => ({
 }))
 
 import * as Sentry from '@sentry/nextjs'
-import { YoutubeApiError, youtubeConnector } from '@/lib/connectors/youtube'
+import {
+  ANALYTICS_LOOKBACK_DAYS,
+  YoutubeApiError,
+  youtubeConnector,
+} from '@/lib/connectors/youtube'
+import { ReauthRequiredError } from '@/lib/connectors/token-refresh'
+import {
+  ANALYTICS_LAG_DAYS,
+  formatDate,
+  toUtcDateOnly,
+  YoutubeBackfillError,
+} from '@/lib/connectors/youtube-analytics'
 
 import channelFixture from '../../fixtures/youtube/channel.json'
 import playlistPage1Fixture from '../../fixtures/youtube/playlist-items-page1.json'
@@ -20,10 +31,37 @@ import videoItemMalformedFixture from '../../fixtures/youtube/video-item-malform
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3'
+const YOUTUBE_ANALYTICS_REPORTS_URL = 'https://youtubeanalytics.googleapis.com/v2/reports'
 const SECONDS_TO_MS = 1000
+const MS_PER_DAY = 86400000
+const QUOTA_EXCEEDED_STATUS = 403
+
+// The connector requests exactly the columns rowToMetrics consumes; `views`
+// is deliberately absent (P-14 — the connector's own cumulative `views` owns
+// that key). Order differs from the request order on purpose: mapping is
+// header-driven.
+const ANALYTICS_COLUMN_HEADERS = [
+  { name: 'subscribersGained' },
+  { name: 'day' },
+  { name: 'averageViewDuration' },
+  { name: 'estimatedMinutesWatched' },
+]
+
+function analyticsRow(day: string, subscribersGained: number, watchTimeMin: number): unknown[] {
+  const AVG_VIEW_DURATION_SEC = 120
+  return [subscribersGained, day, AVG_VIEW_DURATION_SEC, watchTimeMin]
+}
 
 function futureDate(secondsFromNow: number): Date {
   return new Date(Date.now() + secondsFromNow * SECONDS_TO_MS)
+}
+
+function daysAgo(days: number): Date {
+  return new Date(toUtcDateOnly(new Date()).getTime() - days * MS_PER_DAY)
+}
+
+function midnightOf(date: Date): Date {
+  return new Date(`${formatDate(date)}T00:00:00.000Z`)
 }
 
 function uniqueId(label: string): string {
@@ -82,6 +120,10 @@ function jsonResponse(body: unknown, status = 200): MockResponse {
   }
 }
 
+function emptyAnalyticsResponse(): MockResponse {
+  return jsonResponse({ columnHeaders: ANALYTICS_COLUMN_HEADERS, rows: [] })
+}
+
 function tokenRefreshResponse(): Record<string, unknown> {
   return {
     access_token: 'refreshed-access-token',
@@ -103,11 +145,13 @@ describe('syncChannel', () => {
   it('inserts a channel-scope snapshot with string counts coerced to numbers and caches uploadsPlaylistId', async () => {
     const account = await seedAccount()
     const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
-      expect(String(url)).toBe(
-        `${YOUTUBE_API_BASE}/channels?part=statistics,contentDetails&mine=true`,
-      )
+      const urlStr = String(url)
       const headers = init.headers as Record<string, string>
       expect(headers.Authorization).toBe('Bearer current-access-token')
+      if (urlStr.startsWith(YOUTUBE_ANALYTICS_REPORTS_URL)) {
+        return emptyAnalyticsResponse()
+      }
+      expect(urlStr).toBe(`${YOUTUBE_API_BASE}/channels?part=statistics,contentDetails&mine=true`)
       return jsonResponse(channelFixture)
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -124,7 +168,7 @@ describe('syncChannel', () => {
 
     const updatedAccount = await collections().platformAccounts.findOne({ _id: account._id })
     expect(updatedAccount?.uploadsPlaylistId).toBe('UUfixtureUploadsPlaylistId')
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('throws when the channels.list envelope is malformed', async () => {
@@ -135,6 +179,198 @@ describe('syncChannel', () => {
     )
 
     await expect(youtubeConnector.syncChannel(account)).rejects.toThrow()
+  })
+})
+
+describe('syncChannel — daily analytics', () => {
+  const WATCH_TIME_MIN = 500
+  const SUBSCRIBERS_GAINED = 5
+  const AVG_VIEW_DURATION_SEC = 120
+
+  function analyticsMock(
+    respond: (urlStr: string) => MockResponse,
+  ): ReturnType<typeof vi.fn<(url: string, init?: RequestInit) => Promise<MockResponse>>> {
+    return vi.fn(async (url: string) => {
+      const urlStr = String(url)
+      if (urlStr.startsWith(YOUTUBE_ANALYTICS_REPORTS_URL)) {
+        return respond(urlStr)
+      }
+      return jsonResponse(channelFixture)
+    })
+  }
+
+  it('writes a day row per settled day carrying the analytics-only metric keys', async () => {
+    const account = await seedAccount()
+    const day = daysAgo(ANALYTICS_LAG_DAYS)
+    const fetchMock = analyticsMock(() =>
+      jsonResponse({
+        columnHeaders: ANALYTICS_COLUMN_HEADERS,
+        rows: [analyticsRow(formatDate(day), SUBSCRIBERS_GAINED, WATCH_TIME_MIN)],
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await youtubeConnector.syncChannel(account)
+
+    const dayRow = await collections().metricSnapshots.findOne({
+      'meta.creatorId': account.creatorId,
+      'meta.scope': 'channel',
+      capturedAt: midnightOf(day),
+    })
+    // The keys are the point of the task — a card field with no key behind it
+    // is the P-13 defect this sync exists to fix.
+    expect(dayRow?.metrics.watchTimeMin).toBe(WATCH_TIME_MIN)
+    expect(dayRow?.metrics.subscribersGained).toBe(SUBSCRIBERS_GAINED)
+    expect(dayRow?.metrics.avgViewDurationSec).toBe(AVG_VIEW_DURATION_SEC)
+    // P-14: the cumulative `views` on the connector's own row stays this key's
+    // only meaning.
+    expect('views' in (dayRow?.metrics ?? {})).toBe(false)
+    expect(dayRow?.meta.itemExternalId).toBeUndefined()
+  })
+
+  it('requests only settled days, reaching back far enough to repair missed runs', async () => {
+    const account = await seedAccount()
+    let requested: URL | undefined
+    const fetchMock = analyticsMock((urlStr) => {
+      requested = new URL(urlStr)
+      return emptyAnalyticsResponse()
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await youtubeConnector.syncChannel(account)
+
+    // Younger than the lag boundary the report is still being revised, and a
+    // time-series row written from it could never be corrected.
+    expect(requested?.searchParams.get('endDate')).toBe(formatDate(daysAgo(ANALYTICS_LAG_DAYS)))
+    // Behind it, the window re-covers the days a failed run would have missed
+    // — including every day the link-time backfill left unwritten.
+    expect(requested?.searchParams.get('startDate')).toBe(
+      formatDate(daysAgo(ANALYTICS_LAG_DAYS + ANALYTICS_LOOKBACK_DAYS)),
+    )
+    expect(ANALYTICS_LOOKBACK_DAYS).toBeGreaterThanOrEqual(ANALYTICS_LAG_DAYS)
+    expect(requested?.searchParams.get('dimensions')).toBe('day')
+  })
+
+  it('writes the analytics row for a day that already carries a connector channel row', async () => {
+    const account = await seedAccount()
+    // Strictly inside the window, never the boundary day itself: a wall-clock
+    // stamp on the boundary day lands AFTER the range's midnight `$lte`, so
+    // the existence query would not return the row at all and the assertion
+    // below would hold no matter what the skip-check did.
+    const day = daysAgo(ANALYTICS_LAG_DAYS + 1)
+    const CONNECTOR_CAPTURE_HOUR_MS = 14 * 3600 * 1000
+    // A connector row for the same day, stamped at wall-clock time the way
+    // syncChannel stamps its own. A skip-check keyed on the day alone would
+    // match this row and never write analytics for that day again.
+    await collections().metricSnapshots.insertOne({
+      capturedAt: new Date(midnightOf(day).getTime() + CONNECTOR_CAPTURE_HOUR_MS),
+      meta: { creatorId: account.creatorId, platform: 'youtube', scope: 'channel' },
+      metrics: { subscribers: 10, views: 20 },
+    })
+    const fetchMock = analyticsMock(() =>
+      jsonResponse({
+        columnHeaders: ANALYTICS_COLUMN_HEADERS,
+        rows: [analyticsRow(formatDate(day), SUBSCRIBERS_GAINED, WATCH_TIME_MIN)],
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await youtubeConnector.syncChannel(account)
+
+    const dayRow = await collections().metricSnapshots.findOne({
+      'meta.creatorId': account.creatorId,
+      capturedAt: midnightOf(day),
+    })
+    expect(dayRow?.metrics.watchTimeMin).toBe(WATCH_TIME_MIN)
+  })
+
+  it('inserts no second analytics row for a day it already wrote', async () => {
+    const account = await seedAccount()
+    const day = daysAgo(ANALYTICS_LAG_DAYS)
+    const fetchMock = analyticsMock(() =>
+      jsonResponse({
+        columnHeaders: ANALYTICS_COLUMN_HEADERS,
+        rows: [analyticsRow(formatDate(day), SUBSCRIBERS_GAINED, WATCH_TIME_MIN)],
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await youtubeConnector.syncChannel(account)
+    await youtubeConnector.syncChannel(account)
+
+    const dayRows = await collections()
+      .metricSnapshots.find({
+        'meta.creatorId': account.creatorId,
+        capturedAt: midnightOf(day),
+      })
+      .toArray()
+    expect(dayRows).toHaveLength(1)
+  })
+
+  it('inserts nothing when the report has no rows', async () => {
+    const account = await seedAccount()
+    const fetchMock = analyticsMock(() => emptyAnalyticsResponse())
+    vi.stubGlobal('fetch', fetchMock)
+
+    await youtubeConnector.syncChannel(account)
+
+    const midnightRows = await collections()
+      .metricSnapshots.find({
+        'meta.creatorId': account.creatorId,
+        capturedAt: midnightOf(daysAgo(ANALYTICS_LAG_DAYS)),
+      })
+      .toArray()
+    expect(midnightRows).toHaveLength(0)
+    expect(Sentry.captureException).not.toHaveBeenCalled()
+  })
+
+  it('keeps the channel row and the account sync alive when the analytics call is rejected', async () => {
+    // A creator who revoked the analytics scope out of band: the Data API
+    // call still succeeds, the Analytics one 403s. Letting that abort
+    // syncChannel would cost them syncContent + syncMetrics too, since
+    // ingestAccount runs syncChannel first.
+    const account = await seedAccount()
+    const fetchMock = analyticsMock(() =>
+      jsonResponse({ error: 'insufficientPermissions' }, QUOTA_EXCEEDED_STATUS),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(youtubeConnector.syncChannel(account)).resolves.toBeUndefined()
+
+    const channelRow = await collections().metricSnapshots.findOne({
+      'meta.creatorId': account.creatorId,
+      'meta.scope': 'channel',
+    })
+    expect(channelRow?.metrics.subscribers).toBe(12345)
+    const captured = vi.mocked(Sentry.captureException).mock.calls[0]?.[0]
+    // A typed error carrying the status, never a non-OK body parsed as payload.
+    expect(captured).toBeInstanceOf(YoutubeBackfillError)
+    expect((captured as YoutubeBackfillError).status).toBe(QUOTA_EXCEEDED_STATUS)
+  })
+
+  it('lets a reauth requirement propagate rather than swallowing it', async () => {
+    const account = await seedAccount()
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const urlStr = String(url)
+      if (init?.method === 'POST') {
+        // Refresh itself fails — the account genuinely needs re-auth, which
+        // runIsolated reports per account instead of as a generic error.
+        return jsonResponse({ error: 'invalid_grant' }, 400)
+      }
+      if (urlStr.startsWith(YOUTUBE_ANALYTICS_REPORTS_URL)) {
+        return jsonResponse({ error: 'unauthorized' }, 401)
+      }
+      return jsonResponse(channelFixture)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(youtubeConnector.syncChannel(account)).rejects.toThrow(ReauthRequiredError)
+
+    const channelRow = await collections().metricSnapshots.findOne({
+      'meta.creatorId': account.creatorId,
+      'meta.scope': 'channel',
+    })
+    expect(channelRow).not.toBeNull()
   })
 })
 
@@ -339,6 +575,9 @@ describe('401 handling', () => {
         expect(urlStr).toBe(GOOGLE_TOKEN_URL)
         return jsonResponse(tokenRefreshResponse())
       }
+      if (urlStr.startsWith(YOUTUBE_ANALYTICS_REPORTS_URL)) {
+        return emptyAnalyticsResponse()
+      }
       channelsCallCount += 1
       if (channelsCallCount === 1) {
         return jsonResponse({ error: 'unauthorized' }, 401)
@@ -374,8 +613,6 @@ describe('401 handling', () => {
 })
 
 describe('non-401 error responses', () => {
-  const QUOTA_EXCEEDED_STATUS = 403
-
   it('throws a YoutubeApiError carrying the status on a non-401 error from the initial call', async () => {
     const account = await seedAccount()
     vi.stubGlobal(
@@ -578,12 +815,15 @@ describe('request shape', () => {
       expect(urlStr).not.toContain('search')
       const headers = init?.headers as Record<string, string> | undefined
       expect(headers?.Authorization).toBe('Bearer current-access-token')
+      if (urlStr.startsWith(YOUTUBE_ANALYTICS_REPORTS_URL)) {
+        return emptyAnalyticsResponse()
+      }
       return jsonResponse(channelFixture)
     })
     vi.stubGlobal('fetch', fetchMock)
 
     await youtubeConnector.syncChannel(account)
 
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })

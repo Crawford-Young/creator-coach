@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { ObjectId } from 'mongodb'
 import { collections, type MetricSnapshotDoc } from '@/db'
 import { queryChannelSeries, queryItemSeries, rangeStart } from '@/lib/metrics/query'
+import { REPORTS_METRICS } from '@/lib/connectors/youtube-analytics'
 
 const MS_PER_DAY = 86400000
 
@@ -162,6 +163,146 @@ describe('queryChannelSeries', () => {
     await expect(
       queryChannelSeries(badCreatorId, { platforms: ['twitch'], range: 'all' }),
     ).rejects.toThrow()
+  })
+})
+
+describe('queryChannelSeries — YouTube views read-time split (P-14)', () => {
+  // Backfill-origin rows are stamped at exact UTC midnight
+  // (youtube-backfill.ts: `new Date(`${dayKey}T00:00:00.000Z`)`); the
+  // connector stamps real wall-clock capturedAt. This helper picks the
+  // midnight instant for a given day string, matching backfill's own stamp.
+  function utcMidnight(day: string): Date {
+    return new Date(`${day}T00:00:00.000Z`)
+  }
+
+  it('a Twitch channel row at midnight UTC keeps its views (platform gate)', async () => {
+    const creatorId = new ObjectId().toHexString()
+    await collections().metricSnapshots.insertOne(
+      snapshotDoc({
+        meta: { creatorId, platform: 'twitch', scope: 'channel' },
+        capturedAt: utcMidnight('2026-08-05'),
+        metrics: { followers: 10, views: 500 },
+      }),
+    )
+
+    const series = await queryChannelSeries(creatorId, { platforms: ['twitch'], range: 'all' })
+
+    expect(series).toEqual([
+      { day: '2026-08-05', platform: 'twitch', metrics: { followers: 10, views: 500 } },
+    ])
+  })
+
+  it('a YouTube item-scope row at midnight UTC keeps its views (scope gate — shared-pipeline regression)', async () => {
+    const creatorId = new ObjectId().toHexString()
+    const itemExternalId = 'vid-midnight'
+    await collections().metricSnapshots.insertOne(
+      snapshotDoc({
+        meta: { creatorId, platform: 'youtube', scope: 'item', itemExternalId },
+        capturedAt: utcMidnight('2026-08-05'),
+        metrics: { views: 500 },
+      }),
+    )
+
+    const series = await queryItemSeries(creatorId, itemExternalId, 'all')
+
+    expect(series).toEqual([{ day: '2026-08-05', platform: 'youtube', metrics: { views: 500 } }])
+  })
+
+  it('a non-midnight YouTube channel row keeps its views', async () => {
+    const creatorId = new ObjectId().toHexString()
+    await collections().metricSnapshots.insertOne(
+      snapshotDoc({
+        meta: { creatorId, platform: 'youtube', scope: 'channel' },
+        capturedAt: new Date('2026-08-05T14:32:00.000Z'),
+        metrics: { views: 12345, subscribers: 20 },
+      }),
+    )
+
+    const series = await queryChannelSeries(creatorId, { platforms: ['youtube'], range: 'all' })
+
+    expect(series).toEqual([
+      { day: '2026-08-05', platform: 'youtube', metrics: { views: 12345, subscribers: 20 } },
+    ])
+  })
+
+  it('a midnight-UTC YouTube channel row loses views but keeps its other metrics (backfill-origin strip)', async () => {
+    const creatorId = new ObjectId().toHexString()
+    await collections().metricSnapshots.insertOne(
+      snapshotDoc({
+        meta: { creatorId, platform: 'youtube', scope: 'channel' },
+        capturedAt: utcMidnight('2026-08-05'),
+        metrics: {
+          views: 999999,
+          watchTimeMin: 42,
+          subscribersGained: 3,
+          avgViewDurationSec: 120,
+        },
+      }),
+    )
+
+    const series = await queryChannelSeries(creatorId, { platforms: ['youtube'], range: 'all' })
+
+    expect(series).toEqual([
+      {
+        day: '2026-08-05',
+        platform: 'youtube',
+        metrics: { watchTimeMin: 42, subscribersGained: 3, avgViewDurationSec: 120 },
+      },
+    ])
+  })
+
+  it('a day with both a backfill row (midnight) and a connector row (real capturedAt) yields the connector’s cumulative views, merged with the backfill day metrics', async () => {
+    const creatorId = new ObjectId().toHexString()
+    await collections().metricSnapshots.insertOne(
+      snapshotDoc({
+        meta: { creatorId, platform: 'youtube', scope: 'channel' },
+        capturedAt: utcMidnight('2026-08-05'),
+        metrics: { views: 999999, watchTimeMin: 42 },
+      }),
+    )
+    await collections().metricSnapshots.insertOne(
+      snapshotDoc({
+        meta: { creatorId, platform: 'youtube', scope: 'channel' },
+        capturedAt: new Date('2026-08-05T09:00:00.000Z'),
+        metrics: { views: 5000, subscribers: 20 },
+      }),
+    )
+
+    const series = await queryChannelSeries(creatorId, { platforms: ['youtube'], range: 'all' })
+
+    expect(series).toEqual([
+      {
+        day: '2026-08-05',
+        platform: 'youtube',
+        metrics: { watchTimeMin: 42, views: 5000, subscribers: 20 },
+      },
+    ])
+  })
+
+  it('a midnight-UTC YouTube channel row whose only metric is views reduces to an empty metrics object, and the day still parses/appears', async () => {
+    const creatorId = new ObjectId().toHexString()
+    await collections().metricSnapshots.insertOne(
+      snapshotDoc({
+        meta: { creatorId, platform: 'youtube', scope: 'channel' },
+        capturedAt: utcMidnight('2026-08-05'),
+        metrics: { views: 999999 },
+      }),
+    )
+
+    const series = await queryChannelSeries(creatorId, { platforms: ['youtube'], range: 'all' })
+
+    expect(series).toEqual([{ day: '2026-08-05', platform: 'youtube', metrics: {} }])
+  })
+})
+
+describe('REPORTS_METRICS — read-side coupling guard (P-14)', () => {
+  it('never requests views — the exact-midnight YouTube channel strip above assumes no analytics row ever carries it', () => {
+    // If `views` were ever added back to the Analytics reports.query request,
+    // this file's `IS_BACKFILL_ORIGIN_YOUTUBE_VIEWS` $$REMOVE guard would
+    // silently drop a legitimately fetched per-day figure from every
+    // exact-midnight YouTube channel row, with nothing to catch it — this
+    // test is that catch.
+    expect(REPORTS_METRICS.split(',')).not.toContain('views')
   })
 })
 

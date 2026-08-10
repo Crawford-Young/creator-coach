@@ -9,11 +9,13 @@ vi.mock('@sentry/nextjs', () => ({
 }))
 
 import * as Sentry from '@sentry/nextjs'
+import { backfillYouTubeChannel, BACKFILL_CHUNK_DAYS } from '@/lib/ingest/youtube-backfill'
 import {
-  backfillYouTubeChannel,
-  BACKFILL_CHUNK_DAYS,
+  ANALYTICS_LAG_DAYS,
+  formatDate,
+  toUtcDateOnly,
   YoutubeBackfillError,
-} from '@/lib/ingest/youtube-backfill'
+} from '@/lib/connectors/youtube-analytics'
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3'
@@ -30,12 +32,8 @@ function uniqueId(label: string): string {
   return `${label}-${new ObjectId().toHexString()}`
 }
 
-function toUtcDateOnly(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
-}
-
-function formatDate(date: Date): string {
-  return date.toISOString().slice(0, 10)
+function daysAgo(days: number): Date {
+  return new Date(toUtcDateOnly(new Date()).getTime() - days * MS_PER_DAY)
 }
 
 async function seedAccount(
@@ -102,9 +100,9 @@ describe('chunk math', () => {
   it('splits a ~2.5-year range into 3 contiguous chunks capped at BACKFILL_CHUNK_DAYS', async () => {
     expect(BACKFILL_CHUNK_DAYS).toBe(365)
     const account = await seedAccount()
-    const today = toUtcDateOnly(new Date())
-    const SPAN_DAYS = 913 // ~2.5 years — ceil(913/365) = 3 chunks
-    const publishedDate = new Date(today.getTime() - SPAN_DAYS * MS_PER_DAY)
+    const SPAN_DAYS = 913 // ~2.5 years — 911 settled days = 3 chunks
+    const publishedDate = daysAgo(SPAN_DAYS)
+    const lastSettledDay = daysAgo(ANALYTICS_LAG_DAYS)
     const reportsCalls: Array<{ startDate: string; endDate: string }> = []
 
     const fetchMock = vi.fn(async (url: string) => {
@@ -143,15 +141,64 @@ describe('chunk math', () => {
       expect(nextStart.getTime() - prevEnd.getTime()).toBe(MS_PER_DAY)
     }
     expect(reportsCalls[0]!.startDate).toBe(formatDate(publishedDate))
-    expect(reportsCalls[2]!.endDate).toBe(formatDate(today))
+    expect(reportsCalls[2]!.endDate).toBe(formatDate(lastSettledDay))
+  })
+})
+
+describe('lag boundary', () => {
+  it('stops short of the unsettled days instead of freezing partial figures', async () => {
+    const account = await seedAccount()
+    const reportsCalls: Array<{ startDate: string; endDate: string }> = []
+    const fetchMock = vi.fn(async (url: string) => {
+      const urlStr = String(url)
+      if (urlStr.startsWith(`${YOUTUBE_API_BASE}/channels`)) {
+        return jsonResponse(channelFixture(daysAgo(30).toISOString()))
+      }
+      if (urlStr.startsWith(YOUTUBE_ANALYTICS_REPORTS_URL)) {
+        const parsedUrl = new URL(urlStr)
+        reportsCalls.push({
+          startDate: parsedUrl.searchParams.get('startDate') ?? '',
+          endDate: parsedUrl.searchParams.get('endDate') ?? '',
+        })
+        return jsonResponse({ columnHeaders: DEFAULT_COLUMN_HEADERS, rows: [] })
+      }
+      throw new Error(`unexpected fetch url: ${urlStr}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await backfillYouTubeChannel(account)
+
+    // A day requested before the API has finished revising it would be
+    // written partial and could never be corrected — the collection takes no
+    // updates. Those days belong to the daily sync, once settled.
+    expect(reportsCalls).toHaveLength(1)
+    expect(reportsCalls[0]!.endDate).toBe(formatDate(daysAgo(ANALYTICS_LAG_DAYS)))
+    expect(ANALYTICS_LAG_DAYS).toBeGreaterThan(0)
+  })
+
+  it('requests nothing for a channel created inside the lag window', async () => {
+    const account = await seedAccount()
+    const fetchMock = vi.fn(async (url: string) => {
+      const urlStr = String(url)
+      if (urlStr.startsWith(`${YOUTUBE_API_BASE}/channels`)) {
+        return jsonResponse(channelFixture(daysAgo(ANALYTICS_LAG_DAYS - 1).toISOString()))
+      }
+      throw new Error(`unexpected fetch url: ${urlStr}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await backfillYouTubeChannel(account)
+
+    expect(result).toEqual({ daysWritten: 0, daysSkipped: 0, chunks: 0 })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
 
 describe('skip-existing-days', () => {
   it('skips days that already have a channel-scope snapshot and writes the rest', async () => {
     const account = await seedAccount()
-    const today = toUtcDateOnly(new Date())
-    const publishedDate = new Date(today.getTime() - 4 * MS_PER_DAY) // 5-day range, single chunk
+    // 5 settled days ending on the lag boundary — a single chunk.
+    const publishedDate = daysAgo(ANALYTICS_LAG_DAYS + 4)
 
     const dayStrings = Array.from({ length: 5 }, (_, i) =>
       formatDate(new Date(publishedDate.getTime() + i * MS_PER_DAY)),
@@ -162,7 +209,7 @@ describe('skip-existing-days', () => {
       await metricSnapshots.insertOne({
         capturedAt: new Date(`${dayStr}T00:00:00.000Z`),
         meta: { creatorId: account.creatorId, platform: 'youtube', scope: 'channel' },
-        metrics: { views: 1 },
+        metrics: { watchTimeMin: 1 },
       })
     }
 
@@ -195,20 +242,20 @@ describe('skip-existing-days', () => {
 
   it('does not call insertMany when every row in a chunk is already present', async () => {
     const account = await seedAccount()
-    const today = toUtcDateOnly(new Date())
-    const dayStr = formatDate(today)
+    const lastSettledDay = daysAgo(ANALYTICS_LAG_DAYS)
+    const dayStr = formatDate(lastSettledDay)
 
     const { metricSnapshots } = collections()
     await metricSnapshots.insertOne({
       capturedAt: new Date(`${dayStr}T00:00:00.000Z`),
       meta: { creatorId: account.creatorId, platform: 'youtube', scope: 'channel' },
-      metrics: { views: 1 },
+      metrics: { watchTimeMin: 1 },
     })
 
     const fetchMock = vi.fn(async (url: string) => {
       const urlStr = String(url)
       if (urlStr.startsWith(`${YOUTUBE_API_BASE}/channels`)) {
-        return jsonResponse(channelFixture(today.toISOString()))
+        return jsonResponse(channelFixture(lastSettledDay.toISOString()))
       }
       if (urlStr.startsWith(YOUTUBE_ANALYTICS_REPORTS_URL)) {
         return jsonResponse({ columnHeaders: DEFAULT_COLUMN_HEADERS, rows: [[dayStr, 1, 2, 3, 4]] })
@@ -229,14 +276,77 @@ describe('skip-existing-days', () => {
   })
 })
 
+describe('re-link over connector rows', () => {
+  it('writes the analytics rows for days that already carry a wall-clock connector snapshot', async () => {
+    const account = await seedAccount()
+    // 3 settled days ending on the lag boundary — a single chunk.
+    const publishedDate = daysAgo(ANALYTICS_LAG_DAYS + 2)
+    const dayStrings = Array.from({ length: 3 }, (_, i) =>
+      formatDate(new Date(publishedDate.getTime() + i * MS_PER_DAY)),
+    )
+    const CONNECTOR_CAPTURE_HOUR_MS = 14 * 3600 * 1000
+
+    // The re-link shape: `youtubeConnector.syncChannel` has been writing a
+    // wall-clock-stamped channel row every day, so days inside the backfill
+    // range already carry a channel-scope snapshot that holds none of the
+    // analytics metrics. A skip-check keyed on the day alone would match
+    // those rows and leave their analytics permanently unwritten — the daily
+    // sync only ever revisits the last few days.
+    const { metricSnapshots } = collections()
+    for (const dayStr of [dayStrings[0]!, dayStrings[1]!]) {
+      await metricSnapshots.insertOne({
+        capturedAt: new Date(
+          new Date(`${dayStr}T00:00:00.000Z`).getTime() + CONNECTOR_CAPTURE_HOUR_MS,
+        ),
+        meta: { creatorId: account.creatorId, platform: 'youtube', scope: 'channel' },
+        metrics: { subscribers: 10, views: 20 },
+      })
+    }
+
+    const rows = dayStrings.map((day, i) => [day, 100 + i, 50 + i, 120 + i, i])
+    const fetchMock = vi.fn(async (url: string) => {
+      const urlStr = String(url)
+      if (urlStr.startsWith(`${YOUTUBE_API_BASE}/channels`)) {
+        return jsonResponse(channelFixture(publishedDate.toISOString()))
+      }
+      if (urlStr.startsWith(YOUTUBE_ANALYTICS_REPORTS_URL)) {
+        return jsonResponse({ columnHeaders: DEFAULT_COLUMN_HEADERS, rows })
+      }
+      throw new Error(`unexpected fetch url: ${urlStr}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await backfillYouTubeChannel(account)
+
+    expect(result.daysWritten).toBe(3)
+    expect(result.daysSkipped).toBe(0)
+
+    for (const [i, dayStr] of dayStrings.entries()) {
+      const analyticsRow = await metricSnapshots.findOne({
+        'meta.creatorId': account.creatorId,
+        capturedAt: new Date(`${dayStr}T00:00:00.000Z`),
+      })
+      expect(analyticsRow?.metrics.watchTimeMin).toBe(50 + i)
+    }
+    // The connector rows survive untouched alongside the analytics rows.
+    const count = await metricSnapshots.countDocuments({
+      'meta.creatorId': account.creatorId,
+      'meta.scope': 'channel',
+    })
+    expect(count).toBe(5)
+  })
+})
+
 describe('day-row mapping', () => {
   it('maps row values to metric fields via columnHeaders regardless of column order, and omits null values', async () => {
     const account = await seedAccount()
-    const today = toUtcDateOnly(new Date())
-    const publishedDate = new Date(today.getTime() - 2 * MS_PER_DAY)
+    const publishedDate = daysAgo(ANALYTICS_LAG_DAYS + 2)
     const dayEmpty = formatDate(publishedDate)
-    const dayFull = formatDate(new Date(today.getTime() - MS_PER_DAY))
-    const dayPartial = formatDate(today)
+    const dayFull = formatDate(daysAgo(ANALYTICS_LAG_DAYS + 1))
+    const dayPartial = formatDate(daysAgo(ANALYTICS_LAG_DAYS))
+    // P-14: the report's per-day `views` column is a different quantity from
+    // the connector's cumulative lifetime `views`, and both land in the same
+    // day+platform bucket — so the analytics path writes neither.
 
     // Deliberately NOT in the doc-recon's example order — proves
     // header-driven mapping rather than positional assumption.
@@ -250,7 +360,7 @@ describe('day-row mapping', () => {
     const rows = [
       [null, dayEmpty, null, null, null],
       [5, dayFull, 120, 1000, 500],
-      [null, dayPartial, null, 200, null],
+      [null, dayPartial, null, 200, 300],
     ]
 
     const fetchMock = vi.fn(async (url: string) => {
@@ -281,32 +391,76 @@ describe('day-row mapping', () => {
       capturedAt: new Date(`${dayFull}T00:00:00.000Z`),
     })
     expect(fullDoc?.metrics).toEqual({
-      views: 1000,
       watchTimeMin: 500,
       avgViewDurationSec: 120,
       subscribersGained: 5,
     })
+    // The row carried views=1000 and it was still dropped — P-14 is about the
+    // writer, not about absent data.
+    expect('views' in (fullDoc?.metrics ?? {})).toBe(false)
 
     const partialDoc = await metricSnapshots.findOne({
       'meta.creatorId': account.creatorId,
       capturedAt: new Date(`${dayPartial}T00:00:00.000Z`),
     })
-    expect(partialDoc?.metrics).toEqual({ views: 200 })
-    expect('watchTimeMin' in (partialDoc?.metrics ?? {})).toBe(false)
+    expect(partialDoc?.metrics).toEqual({ watchTimeMin: 300 })
+    expect('views' in (partialDoc?.metrics ?? {})).toBe(false)
     expect('avgViewDurationSec' in (partialDoc?.metrics ?? {})).toBe(false)
     expect('subscribersGained' in (partialDoc?.metrics ?? {})).toBe(false)
+  })
+})
+
+describe('malformed day cell', () => {
+  it('skips a row whose day cell is not a valid YYYY-MM-DD date, reports it, and still writes the valid rows in the same chunk', async () => {
+    const account = await seedAccount()
+    const publishedDate = daysAgo(ANALYTICS_LAG_DAYS + 1)
+    const validDay = formatDate(daysAgo(ANALYTICS_LAG_DAYS))
+    // Row order matches DEFAULT_COLUMN_HEADERS: day, views, estimatedMinutesWatched,
+    // averageViewDuration, subscribersGained. A null `day` cell stringifies to the
+    // literal 'null', which `new Date('nullT00:00:00.000Z')` turns into an Invalid
+    // Date — the write this skip check exists to prevent.
+    const rows = [
+      [null, 5, 10, 15, 1],
+      [validDay, 100, 50, 120, 5],
+    ]
+
+    const fetchMock = vi.fn(async (url: string) => {
+      const urlStr = String(url)
+      if (urlStr.startsWith(`${YOUTUBE_API_BASE}/channels`)) {
+        return jsonResponse(channelFixture(publishedDate.toISOString()))
+      }
+      if (urlStr.startsWith(YOUTUBE_ANALYTICS_REPORTS_URL)) {
+        return jsonResponse({ columnHeaders: DEFAULT_COLUMN_HEADERS, rows })
+      }
+      throw new Error(`unexpected fetch url: ${urlStr}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await backfillYouTubeChannel(account)
+
+    expect(result.daysWritten).toBe(1)
+    expect(result.daysSkipped).toBe(1)
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1)
+
+    const { metricSnapshots } = collections()
+    const count = await metricSnapshots.countDocuments({ 'meta.creatorId': account.creatorId })
+    expect(count).toBe(1)
+    const validDoc = await metricSnapshots.findOne({
+      'meta.creatorId': account.creatorId,
+      capturedAt: new Date(`${validDay}T00:00:00.000Z`),
+    })
+    expect(validDoc?.metrics.watchTimeMin).toBe(50)
   })
 })
 
 describe('empty channel', () => {
   it('no-ops when reports.query returns no rows at all', async () => {
     const account = await seedAccount()
-    const today = toUtcDateOnly(new Date())
 
     const fetchMock = vi.fn(async (url: string) => {
       const urlStr = String(url)
       if (urlStr.startsWith(`${YOUTUBE_API_BASE}/channels`)) {
-        return jsonResponse(channelFixture(today.toISOString()))
+        return jsonResponse(channelFixture(daysAgo(ANALYTICS_LAG_DAYS).toISOString()))
       }
       if (urlStr.startsWith(YOUTUBE_ANALYTICS_REPORTS_URL)) {
         return jsonResponse({ columnHeaders: DEFAULT_COLUMN_HEADERS })
@@ -324,7 +478,6 @@ describe('empty channel', () => {
 describe('token refresh / error status handling', () => {
   it('forces a token refresh and retries once on 401, then succeeds', async () => {
     const account = await seedAccount()
-    const today = toUtcDateOnly(new Date())
     let channelsCallCount = 0
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const urlStr = String(url)
@@ -339,7 +492,7 @@ describe('token refresh / error status handling', () => {
         }
         const headers = init?.headers as Record<string, string> | undefined
         expect(headers?.Authorization).toBe('Bearer refreshed-access-token')
-        return jsonResponse(channelFixture(today.toISOString()))
+        return jsonResponse(channelFixture(daysAgo(ANALYTICS_LAG_DAYS).toISOString()))
       }
       if (urlStr.startsWith(YOUTUBE_ANALYTICS_REPORTS_URL)) {
         return jsonResponse({ columnHeaders: DEFAULT_COLUMN_HEADERS, rows: [] })
@@ -414,12 +567,11 @@ describe('token refresh / error status handling', () => {
 describe('request shape', () => {
   it('sends Authorization: Bearer on reports.query and never puts the token/secret in the URL', async () => {
     const account = await seedAccount()
-    const today = toUtcDateOnly(new Date())
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const urlStr = String(url)
       expect(urlStr).not.toContain('current-access-token')
       if (urlStr.startsWith(`${YOUTUBE_API_BASE}/channels`)) {
-        return jsonResponse(channelFixture(today.toISOString()))
+        return jsonResponse(channelFixture(daysAgo(ANALYTICS_LAG_DAYS).toISOString()))
       }
       if (urlStr.startsWith(YOUTUBE_ANALYTICS_REPORTS_URL)) {
         const headers = init?.headers as Record<string, string> | undefined
@@ -448,11 +600,10 @@ describe('malformed responses', () => {
 
   it('throws when the reports.query envelope is malformed', async () => {
     const account = await seedAccount()
-    const today = toUtcDateOnly(new Date())
     const fetchMock = vi.fn(async (url: string) => {
       const urlStr = String(url)
       if (urlStr.startsWith(`${YOUTUBE_API_BASE}/channels`)) {
-        return jsonResponse(channelFixture(today.toISOString()))
+        return jsonResponse(channelFixture(daysAgo(ANALYTICS_LAG_DAYS).toISOString()))
       }
       return jsonResponse({ notColumnHeaders: [] })
     })
@@ -462,16 +613,16 @@ describe('malformed responses', () => {
 
   it('throws when a required metric column is missing from columnHeaders', async () => {
     const account = await seedAccount()
-    const today = toUtcDateOnly(new Date())
+    const lastSettledDay = daysAgo(ANALYTICS_LAG_DAYS)
     const fetchMock = vi.fn(async (url: string) => {
       const urlStr = String(url)
       if (urlStr.startsWith(`${YOUTUBE_API_BASE}/channels`)) {
-        return jsonResponse(channelFixture(today.toISOString()))
+        return jsonResponse(channelFixture(lastSettledDay.toISOString()))
       }
       if (urlStr.startsWith(YOUTUBE_ANALYTICS_REPORTS_URL)) {
         return jsonResponse({
           columnHeaders: DEFAULT_COLUMN_HEADERS.filter((h) => h.name !== 'subscribersGained'),
-          rows: [[formatDate(today), 10, 5, 60]],
+          rows: [[formatDate(lastSettledDay), 10, 5, 60]],
         })
       }
       throw new Error(`unexpected fetch url: ${urlStr}`)

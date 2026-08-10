@@ -6,12 +6,20 @@ import {
   type MetricSnapshotDoc,
   type PlatformAccountDoc,
 } from '@/db'
-import { getFreshGoogleToken } from './token-refresh'
+import { logger } from '@/lib/logger'
+import { addDays, settledAnalyticsBoundary, writeChannelAnalyticsRange } from './youtube-analytics'
+import { getFreshGoogleToken, ReauthRequiredError } from './token-refresh'
 import { parseIsoDuration } from './iso-duration'
 import type { PlatformConnector } from './types'
 
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3'
 const HTTP_UNAUTHORIZED = 401
+
+// How far behind the settled boundary each run re-reads. Only days with no
+// analytics row yet are inserted, so this is pure repair capacity: a week of
+// consecutive failed cron runs still self-heals on the next successful one,
+// and it covers the unsettled tail the link-time backfill leaves unwritten.
+export const ANALYTICS_LOOKBACK_DAYS = 7
 
 // A3 (doc-recon assumption, verify at backfill QA): the id-cap per
 // videos.list call is undocumented — batch conservatively at 50.
@@ -239,6 +247,21 @@ function bestThumbnailUrl(thumbnails: VideoItem['snippet']['thumbnails']): strin
   return undefined
 }
 
+/**
+ * Channel-scope day series (watch time, subscribers gained, average view
+ * duration) from the YouTube Analytics API — the recurring write path for
+ * metrics the link-time backfill would otherwise freeze at the link date.
+ *
+ * Reads `[today - LAG - LOOKBACK, today - LAG]` in one window: days younger
+ * than the lag are still being revised upstream, and metricSnapshots takes no
+ * updates, so a day written early could never be corrected. Which days of
+ * that window actually get inserted is `writeChannelAnalyticsRange`'s call.
+ */
+async function syncChannelAnalytics(account: PlatformAccountDoc): Promise<void> {
+  const end = settledAnalyticsBoundary()
+  await writeChannelAnalyticsRange(account, { start: addDays(end, -ANALYTICS_LOOKBACK_DAYS), end })
+}
+
 async function syncChannel(account: PlatformAccountDoc): Promise<void> {
   const channel = await fetchChannel(account)
   const { metricSnapshots, platformAccounts } = collections()
@@ -260,6 +283,28 @@ async function syncChannel(account: PlatformAccountDoc): Promise<void> {
     { _id: account._id },
     { $set: { uploadsPlaylistId: channel.contentDetails.relatedPlaylists.uploads } },
   )
+
+  // Deliberate deviation from the repo's throw-and-let-runIsolated-catch
+  // convention: ingestAccount calls syncChannel BEFORE syncContent and
+  // syncMetrics, so an analytics failure thrown from here would cost the
+  // creator their entire YouTube ingest for the day rather than just their
+  // watch time — a creator who revoked the analytics scope out of band would
+  // silently stop ingesting altogether. This call is supplementary to the
+  // channel sync, not constitutive of it, so it is isolated here.
+  // ReauthRequiredError still propagates: it means the account genuinely
+  // needs re-auth, and runIsolated reports that per account.
+  try {
+    await syncChannelAnalytics(account)
+  } catch (error) {
+    if (error instanceof ReauthRequiredError) {
+      throw error
+    }
+    Sentry.captureException(error)
+    logger.warn(
+      { creatorId: account.creatorId, platform: account.platform },
+      'youtube: channel analytics sync failed',
+    )
+  }
 }
 
 async function syncContent(account: PlatformAccountDoc): Promise<void> {
