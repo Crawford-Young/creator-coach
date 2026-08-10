@@ -9,36 +9,9 @@ import { getPersonaProfile } from '@/lib/persona/get'
 import { requireCreator } from '@/lib/tenant'
 import { collections } from '@/db'
 import { personaProfileSchema } from '@/lib/persona/schema'
+import { validPersonaProfile as validProfile } from '../../fixtures/persona-profile'
 
 const mockRequireCreator = requireCreator as unknown as ReturnType<typeof vi.fn>
-
-const validProfile = {
-  identity: { mainDraw: 'community heart', archetype: 'community-heart' },
-  contentPillars: {
-    anchor: { name: 'CS2', mode: 'ranked + squad nights' },
-    rotation: ['Valorant'],
-  },
-  voice: {
-    toneWords: ['calm'],
-    sampleLines: ['gg'],
-    dos: ['uplift'],
-    donts: ['rage'],
-    wildcardDial: 6,
-  },
-  philosophy: { values: ['care'], statement: 'people first' },
-  audience: { description: 'the campfire', servesWho: 'regulars' },
-  constraints: {
-    timezone: 'Europe/London',
-    weeklySchedule: 'eves',
-    collabAvailability: 'weekends',
-  },
-  sustainability: {
-    energyPatterns: 'morning low',
-    burnoutTriggers: ['over-streaming'],
-    restNeeds: '1 day/wk',
-  },
-  platforms: { primary: { type: 'twitch', handle: 'x' }, clipTargets: ['tiktok'] },
-}
 
 beforeEach(() => vi.clearAllMocks())
 
