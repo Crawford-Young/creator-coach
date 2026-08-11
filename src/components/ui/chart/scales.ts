@@ -1,5 +1,5 @@
 import { scaleLinear, scaleUtc, type ScaleLinear, type ScaleTime } from 'd3-scale'
-import type { RangePreset } from '@/lib/metrics/query'
+import type { RangePreset } from '@/lib/metrics/range'
 import type { ChartPoint } from '@/components/ui/chart/segment'
 
 export const TICK_COUNT: Readonly<Record<RangePreset, number>> = {
@@ -34,16 +34,29 @@ function padFlatExtent(value: number): [number, number] {
 
 /**
  * Builds the shared x/y scales for a chart from its already-segmented
- * points (see `segmentSeries`). The x domain spans the min/max `t` across
- * every segment; the y domain is the data extent `[min, max]` across every
- * value, then `.nice()`d to round tick values. An empty `segments` input (no
- * data at all) falls back to a degenerate but finite domain rather than
- * propagating NaN/Infinity from `Math.min`/`Math.max` over an empty array.
+ * points (see `segmentSeries`). The y domain is the data extent `[min, max]`
+ * across every value, then `.nice()`d to round tick values. An empty
+ * `segments` input (no data at all) falls back to a degenerate but finite
+ * domain rather than propagating NaN/Infinity from `Math.min`/`Math.max` over
+ * an empty array.
+ *
+ * The x domain is REQUIRED and has no default, because the two callers want
+ * opposite things and a silent default hands the next caller whichever one it
+ * did not want:
+ *
+ * - an explicit `[start, end]` pins the axis to a window the data need not
+ *   fill. A dated chart needs this: `segments` carry only the non-null points,
+ *   so a range whose readings start late would otherwise crop to them and draw
+ *   every range preset identically.
+ * - `'extent'` fits the axis to the data (min/max `t` across every segment).
+ *   A sparkline wants this: no axis, no labels, no range semantics, so empty
+ *   leading days would only cost it width.
  */
 export function makeScales(
   segments: readonly (readonly ChartPoint[])[],
   width: number,
   height: number,
+  xDomain: readonly [number, number] | 'extent',
 ): { x: ScaleTime<number, number>; y: ScaleLinear<number, number> } {
   const points = segments.flat()
   const times = points.map((point) => point.t)
@@ -54,7 +67,7 @@ export function makeScales(
   const minValue = values.length > 0 ? Math.min(...values) : FALLBACK_VALUE
   const maxValue = values.length > 0 ? Math.max(...values) : FALLBACK_VALUE
 
-  const x = scaleUtc([minTime, maxTime], [0, width])
+  const x = scaleUtc(xDomain === 'extent' ? [minTime, maxTime] : xDomain, [0, width])
   const yDomain =
     values.length > 0 && minValue === maxValue ? padFlatExtent(minValue) : [minValue, maxValue]
   const y = scaleLinear(yDomain, [height, 0]).nice()

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { SERIES_COLOR, TrendChart, type TrendSeries } from '@/components/ui/chart/trend-chart'
+import { TrendChart, type TrendSeries } from '@/components/ui/chart/trend-chart'
+import { SERIES_COLOR } from '@/components/ui/chart/series-color'
 import type { ChartPoint } from '@/components/ui/chart/segment'
 
 const DAY_MS = 86400000
@@ -151,6 +152,21 @@ describe('TrendChart', () => {
       gridlines.forEach((gridline) => {
         expect(gridline.getAttribute('stroke')).toBe('var(--border)')
       })
+    })
+
+    // The failure this guards: a creator who linked two days into a 90-day
+    // window gets an x axis spanning only those two days, so every range preset
+    // draws a pixel-identical chart and the picker looks broken. The sr-only
+    // table lists all the days, so the two renderings would disagree too.
+    it('spans the whole day axis it was given, not just the days carrying a reading', () => {
+      const sparse = series('twitch', 'Twitch followers', [null, null, null, null, null, 150, 160])
+      const { container } = renderChart({ series: [sparse] })
+
+      const labels = [...container.querySelectorAll('[data-axis="x"] text')].map(
+        (node) => node.textContent,
+      )
+      expect(labels[0]).toBe('Jan 1')
+      expect(labels.at(-1)).toBe('Jan 7')
     })
 
     it('takes its x tick density from the range preset', () => {

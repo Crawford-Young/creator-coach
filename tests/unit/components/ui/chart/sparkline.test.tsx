@@ -62,6 +62,22 @@ describe('Sparkline', () => {
     expect(Number(placeholder?.getAttribute('y2'))).toBe(12)
   })
 
+  // Unreachable from the Overview today, since a metric with no reading at all
+  // produces no delta and so no card row. Defensive: a series of pure gaps is
+  // data-shaped, not absent, and drawing nothing would read as a broken
+  // component rather than as "no readings in this window".
+  it('an all-null series renders the same dashed baseline as no points at all', () => {
+    const points = [point(0, null), point(DAY_MS, null)]
+    const { container } = render(<Sparkline points={points} color="red" width={80} height={24} />)
+
+    expect(container.querySelector('path')).toBeNull()
+    expect(container.querySelector('circle')).toBeNull()
+
+    const placeholder = container.querySelector('line')
+    expect(placeholder?.getAttribute('stroke-dasharray')).toBe('2,2')
+    expect(Number(placeholder?.getAttribute('y1'))).toBe(12)
+  })
+
   it('a single-point segment renders a <circle> with numeric cx/cy', () => {
     const points = [point(0, null), point(DAY_MS, 10), point(2 * DAY_MS, null)]
     const { container } = render(<Sparkline points={points} color="red" />)

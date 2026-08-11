@@ -23,8 +23,11 @@ describe('METRIC_KINDS', () => {
   it('leaves the two hazard keys unclassified', () => {
     // ccv is an instantaneous gauge and avgViewDurationSec a daily average;
     // neither point nor daily semantics describe them, so neither is listed.
-    expect(METRIC_KINDS.ccv).toBeUndefined()
-    expect(METRIC_KINDS.avgViewDurationSec).toBeUndefined()
+    // Asserted over the key SET rather than by property access, because the
+    // keys are literal-typed now — `METRIC_KINDS.ccv` no longer compiles, which
+    // is the same guard that keeps an unclassified key off a card.
+    expect(Object.keys(METRIC_KINDS)).not.toContain('ccv')
+    expect(Object.keys(METRIC_KINDS)).not.toContain('avgViewDurationSec')
   })
 })
 
@@ -38,10 +41,10 @@ describe('computeDeltas', () => {
 
     const deltas = computeDeltas(series)
 
-    expect(deltas.twitch?.followers).toEqual({ first: 100, last: 90, delta: -10 })
+    expect(deltas.twitch?.followers).toEqual({ kind: 'point', first: 100, last: 90, delta: -10 })
   })
 
-  it('daily metric: delta is the sum over the range, first/last 0-anchored', () => {
+  it('daily metric: reports a kind-tagged range total, with no endpoints to misread as growth', () => {
     const series: DayMetrics[] = [
       { day: '2026-08-01', platform: 'youtube', metrics: { watchTimeMin: 100 } },
       { day: '2026-08-02', platform: 'youtube', metrics: { watchTimeMin: 150 } },
@@ -50,7 +53,7 @@ describe('computeDeltas', () => {
 
     const deltas = computeDeltas(series)
 
-    expect(deltas.youtube?.watchTimeMin).toEqual({ first: 0, last: 0, delta: 450 })
+    expect(deltas.youtube?.watchTimeMin).toEqual({ kind: 'daily', total: 450 })
   })
 
   it('metric present only one day: point kind delta is 0', () => {
@@ -60,7 +63,7 @@ describe('computeDeltas', () => {
 
     const deltas = computeDeltas(series)
 
-    expect(deltas.twitch?.subscribers).toEqual({ first: 42, last: 42, delta: 0 })
+    expect(deltas.twitch?.subscribers).toEqual({ kind: 'point', first: 42, last: 42, delta: 0 })
   })
 
   it('tracks multiple platforms and metrics independently within one series', () => {
@@ -73,9 +76,9 @@ describe('computeDeltas', () => {
 
     const deltas = computeDeltas(series)
 
-    expect(deltas.twitch?.followers).toEqual({ first: 10, last: 12, delta: 2 })
-    expect(deltas.twitch?.subPoints).toEqual({ first: 5, last: 5, delta: 0 })
-    expect(deltas.youtube?.subscribers).toEqual({ first: 200, last: 210, delta: 10 })
+    expect(deltas.twitch?.followers).toEqual({ kind: 'point', first: 10, last: 12, delta: 2 })
+    expect(deltas.twitch?.subPoints).toEqual({ kind: 'point', first: 5, last: 5, delta: 0 })
+    expect(deltas.youtube?.subscribers).toEqual({ kind: 'point', first: 200, last: 210, delta: 10 })
   })
 
   it('empty series returns an empty object', () => {
@@ -125,8 +128,8 @@ describe('computeDeltas', () => {
     const deltas = computeDeltas(series)
 
     expect(deltas.youtube).toEqual({
-      subscribers: { first: 100, last: 130, delta: 30 },
-      watchTimeMin: { first: 0, last: 0, delta: 25 },
+      subscribers: { kind: 'point', first: 100, last: 130, delta: 30 },
+      watchTimeMin: { kind: 'daily', total: 25 },
     })
   })
 })

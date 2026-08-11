@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/nextjs-vite'
 import { Sparkline } from '@/components/ui/chart/sparkline'
-import { SERIES_COLOR } from '@/components/ui/chart/trend-chart'
+import { SERIES_COLOR } from '@/components/ui/chart/series-color'
 import type { ChartPoint } from '@/components/ui/chart/segment'
 
 const DAY_MS = 86400000
@@ -15,9 +15,22 @@ function points(values: readonly number[]): ChartPoint[] {
   return values.map((value, index) => ({ t: day(index), v: value }))
 }
 
+// P-7: Sparkline's root is `height: 100%`, which resolves to zero in a parent
+// with no definite height — and the preview canvas is exactly such a parent, so
+// an unframed story renders a blank panel. The frame mirrors the shipped call
+// site (`platform-card.tsx`, `h-8 w-full`), which is the point of the story.
 const meta: Meta<typeof Sparkline> = {
   title: 'Chart/Sparkline',
   component: Sparkline,
+  decorators: [
+    function SparklineFrame(Story) {
+      return (
+        <div className="h-8 w-full">
+          <Story />
+        </div>
+      )
+    },
+  ],
 }
 
 export default meta

@@ -27,7 +27,13 @@ export function Sparkline(props: SparklineProps): React.JSX.Element {
   const viewBox = `0 0 ${width} ${height}`
   const style = { width: '100%', height: '100%' }
 
-  if (props.points.length === 0) {
+  const segments = segmentSeries(props.points)
+
+  // No points and all-null points are the same story to a reader — this window
+  // has nothing to draw — so they get the same dashed baseline. Testing the
+  // SEGMENTS rather than the points is what covers both: `segmentSeries` never
+  // emits a segment for a gap.
+  if (segments.length === 0) {
     return (
       <svg aria-hidden="true" viewBox={viewBox} style={style}>
         <line
@@ -43,8 +49,7 @@ export function Sparkline(props: SparklineProps): React.JSX.Element {
     )
   }
 
-  const segments = segmentSeries(props.points)
-  const { x, y } = makeScales(segments, width, height)
+  const { x, y } = makeScales(segments, width, height, 'extent')
   // segmentSeries only ever pushes points with v !== null into a segment
   // (a null point closes the current segment instead) — the `as number`
   // casts below reflect that invariant, not an unchecked assumption.

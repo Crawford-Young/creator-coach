@@ -27,6 +27,14 @@
   --accent-foreground: hsl(240 5.9% 10%);
   --destructive: hsl(0 84.2% 60.2%);
   --destructive-foreground: hsl(0 0% 98%);
+  /* Status tokens. @crawfordyoung/ui ships Alert/Badge variants built on
+     bg-<token>/10 + border-<token> + text-<token>, so each value is used as
+     TEXT and carries the AA burden alone. The design system's flat
+     --warning #f59e0b is ~2.2:1 on white; these are the theme-aware steps
+     (amber/green/sky 700 light, 400 dark) that clear 4.5:1 on both surfaces. */
+  --warning: hsl(26 90% 37%);
+  --success: hsl(142 72% 29%);
+  --info: hsl(201 96% 32%);
   --border: hsl(240 5.9% 90%);
   --input: hsl(240 5.9% 90%);
   --ring: hsl(240 10% 3.9%);
@@ -54,6 +62,9 @@
   --accent-foreground: hsl(0 0% 98%);
   --destructive: hsl(0 62.8% 30.6%);
   --destructive-foreground: hsl(0 0% 98%);
+  --warning: hsl(43 96% 56%);
+  --success: hsl(142 69% 58%);
+  --info: hsl(198 93% 60%);
   --border: hsl(240 3.7% 15.9%);
   --input: hsl(240 3.7% 15.9%);
   --ring: hsl(240 4.9% 83.9%);
@@ -85,6 +96,10 @@
 
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-info: var(--info);
 
   --color-border: var(--border);
   --color-input: var(--input);

@@ -1,26 +1,12 @@
 import { z } from 'zod'
 import type { Collection } from 'mongodb'
 import { collections, type MetricSnapshotDoc, type Platform } from '@/db'
-
-export type RangePreset = '7d' | '30d' | '90d' | 'all'
+import { rangeStart, type RangePreset } from '@/lib/metrics/range'
 
 export interface DayMetrics {
   readonly day: string // 'YYYY-MM-DD' UTC
   readonly platform: Platform
   readonly metrics: Readonly<Record<string, number>>
-}
-
-const MS_PER_DAY = 86400000
-
-const RANGE_DAYS: Record<Exclude<RangePreset, 'all'>, number> = {
-  '7d': 7,
-  '30d': 30,
-  '90d': 90,
-}
-
-export function rangeStart(range: RangePreset, now: Date): Date | null {
-  if (range === 'all') return null
-  return new Date(now.getTime() - RANGE_DAYS[range] * MS_PER_DAY)
 }
 
 // Runtime mirror of the Platform union in @/db — zod needs an actual value
@@ -41,6 +27,14 @@ const dayMetricsSchema = z.object({
 interface ChannelSeriesOptions {
   readonly platforms: readonly Platform[]
   readonly range: RangePreset
+  /**
+   * The instant the range is measured back from. Supplied by the caller rather
+   * than read here so one request's query window and its rendered day axis are
+   * derived from the SAME instant — two independent clock reads a few awaits
+   * apart can straddle a UTC midnight, and the boundary day's rows are then
+   * fetched only to be dropped by the axis that never included it.
+   */
+  readonly now: Date
 }
 
 interface ChannelMatchStage {
@@ -123,7 +117,7 @@ export async function queryChannelSeries(
   options: ChannelSeriesOptions,
 ): Promise<DayMetrics[]> {
   const { metricSnapshots } = collections()
-  const start = rangeStart(options.range, new Date())
+  const start = rangeStart(options.range, options.now)
   const match: ChannelMatchStage = {
     'meta.creatorId': creatorId,
     'meta.scope': 'channel',
@@ -133,13 +127,15 @@ export async function queryChannelSeries(
   return aggregateDaySeries(metricSnapshots, match)
 }
 
+/** `now` carries the same caller-owns-the-clock contract as `ChannelSeriesOptions`. */
 export async function queryItemSeries(
   creatorId: string,
   itemExternalId: string,
   range: RangePreset,
+  now: Date,
 ): Promise<DayMetrics[]> {
   const { metricSnapshots } = collections()
-  const start = rangeStart(range, new Date())
+  const start = rangeStart(range, now)
   const match: ItemMatchStage = {
     'meta.creatorId': creatorId,
     'meta.scope': 'item',

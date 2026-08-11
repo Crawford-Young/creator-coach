@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { render } from '@testing-library/react'
 import { axe } from 'jest-axe'
-import { SERIES_COLOR, TrendChart, type TrendSeries } from '@/components/ui/chart/trend-chart'
+import { TrendChart, type TrendSeries } from '@/components/ui/chart/trend-chart'
+import { SERIES_COLOR } from '@/components/ui/chart/series-color'
 import { Sparkline } from '@/components/ui/chart/sparkline'
 import type { ChartPoint } from '@/components/ui/chart/segment'
 

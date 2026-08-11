@@ -2,10 +2,13 @@
 import { describe, it, expect } from 'vitest'
 import { ObjectId } from 'mongodb'
 import { collections, type MetricSnapshotDoc } from '@/db'
-import { queryChannelSeries, queryItemSeries, rangeStart } from '@/lib/metrics/query'
+import { queryChannelSeries, queryItemSeries } from '@/lib/metrics/query'
 import { REPORTS_METRICS } from '@/lib/connectors/youtube-analytics'
 
 const MS_PER_DAY = 86400000
+// The caller's instant. Most cases query 'all', where it is unused; the
+// relative-age cases below place their fixtures against this same clock.
+const NOW = new Date()
 
 // Named generically (not "channelSnapshot") — reused for both channel- and
 // item-scope docs across this file's describe blocks.
@@ -22,27 +25,38 @@ function snapshotDoc(overrides: Partial<MetricSnapshotDoc> = {}): MetricSnapshot
   }
 }
 
-describe('rangeStart', () => {
-  const now = new Date('2026-08-10T12:00:00.000Z')
-
-  it('7d returns 7 days before now', () => {
-    expect(rangeStart('7d', now)).toEqual(new Date(now.getTime() - 7 * MS_PER_DAY))
-  })
-
-  it('30d returns 30 days before now', () => {
-    expect(rangeStart('30d', now)).toEqual(new Date(now.getTime() - 30 * MS_PER_DAY))
-  })
-
-  it('90d returns 90 days before now', () => {
-    expect(rangeStart('90d', now)).toEqual(new Date(now.getTime() - 90 * MS_PER_DAY))
-  })
-
-  it("'all' returns null", () => {
-    expect(rangeStart('all', now)).toBeNull()
-  })
-})
-
+// `rangeStart` itself is exercised in tests/unit/metrics/range.test.ts, which
+// owns the pure module. This file covers what only a real collection can show.
 describe('queryChannelSeries', () => {
+  // The caller owns the clock: the page resolves one instant and hands the SAME
+  // one to the query and to the day axis. A query reading its own `new Date()`
+  // can land on the far side of a UTC midnight from the axis, fetching a day
+  // the axis then silently drops.
+  it('bounds the window by the caller’s instant, not by the wall clock', async () => {
+    const creatorId = new ObjectId().toHexString()
+    await collections().metricSnapshots.insertOne(
+      snapshotDoc({
+        meta: { creatorId, platform: 'twitch', scope: 'channel' },
+        capturedAt: new Date('2026-08-05T12:00:00.000Z'),
+        metrics: { followers: 7 },
+      }),
+    )
+
+    const wellAfter = await queryChannelSeries(creatorId, {
+      platforms: ['twitch'],
+      range: '7d',
+      now: new Date('2026-08-20T00:00:00.000Z'),
+    })
+    const justAfter = await queryChannelSeries(creatorId, {
+      platforms: ['twitch'],
+      range: '7d',
+      now: new Date('2026-08-06T00:00:00.000Z'),
+    })
+
+    expect(wellAfter).toHaveLength(0)
+    expect(justAfter).toHaveLength(1)
+  })
+
   it('dedupes duplicate same-day channel rows to one point, later capturedAt wins per key (TOCTOU #4 closure)', async () => {
     const creatorId = new ObjectId().toHexString()
     const earlier = new Date('2026-08-05T08:00:00.000Z')
@@ -62,7 +76,11 @@ describe('queryChannelSeries', () => {
       }),
     )
 
-    const series = await queryChannelSeries(creatorId, { platforms: ['twitch'], range: 'all' })
+    const series = await queryChannelSeries(creatorId, {
+      platforms: ['twitch'],
+      range: 'all',
+      now: NOW,
+    })
 
     expect(series).toHaveLength(1)
     expect(series[0]).toEqual({ day: '2026-08-05', platform: 'twitch', metrics: { followers: 12 } })
@@ -87,7 +105,11 @@ describe('queryChannelSeries', () => {
       }),
     )
 
-    const series = await queryChannelSeries(creatorId, { platforms: ['twitch'], range: 'all' })
+    const series = await queryChannelSeries(creatorId, {
+      platforms: ['twitch'],
+      range: 'all',
+      now: NOW,
+    })
 
     expect(series).toHaveLength(1)
     expect(series[0]?.metrics).toEqual({ followers: 10, subscribers: 5, ccv: 42 })
@@ -104,8 +126,16 @@ describe('queryChannelSeries', () => {
       }),
     )
 
-    const sevenDay = await queryChannelSeries(creatorId, { platforms: ['twitch'], range: '7d' })
-    const all = await queryChannelSeries(creatorId, { platforms: ['twitch'], range: 'all' })
+    const sevenDay = await queryChannelSeries(creatorId, {
+      platforms: ['twitch'],
+      range: '7d',
+      now: NOW,
+    })
+    const all = await queryChannelSeries(creatorId, {
+      platforms: ['twitch'],
+      range: 'all',
+      now: NOW,
+    })
 
     expect(sevenDay).toHaveLength(0)
     expect(all).toHaveLength(1)
@@ -133,7 +163,11 @@ describe('queryChannelSeries', () => {
       }),
     )
 
-    const series = await queryChannelSeries(creatorId, { platforms: ['twitch'], range: 'all' })
+    const series = await queryChannelSeries(creatorId, {
+      platforms: ['twitch'],
+      range: 'all',
+      now: NOW,
+    })
 
     expect(series).toHaveLength(1)
     expect(series[0]?.metrics).toEqual({ followers: 1 })
@@ -149,7 +183,7 @@ describe('queryChannelSeries', () => {
     )
 
     await expect(
-      queryChannelSeries(creatorId, { platforms: ['twitch'], range: 'all' }),
+      queryChannelSeries(creatorId, { platforms: ['twitch'], range: 'all', now: NOW }),
     ).resolves.toHaveLength(1)
 
     const badCreatorId = new ObjectId().toHexString()
@@ -161,7 +195,7 @@ describe('queryChannelSeries', () => {
     await collections().metricSnapshots.insertOne(badDoc)
 
     await expect(
-      queryChannelSeries(badCreatorId, { platforms: ['twitch'], range: 'all' }),
+      queryChannelSeries(badCreatorId, { platforms: ['twitch'], range: 'all', now: NOW }),
     ).rejects.toThrow()
   })
 })
@@ -185,7 +219,11 @@ describe('queryChannelSeries — YouTube views read-time split (P-14)', () => {
       }),
     )
 
-    const series = await queryChannelSeries(creatorId, { platforms: ['twitch'], range: 'all' })
+    const series = await queryChannelSeries(creatorId, {
+      platforms: ['twitch'],
+      range: 'all',
+      now: NOW,
+    })
 
     expect(series).toEqual([
       { day: '2026-08-05', platform: 'twitch', metrics: { followers: 10, views: 500 } },
@@ -203,7 +241,7 @@ describe('queryChannelSeries — YouTube views read-time split (P-14)', () => {
       }),
     )
 
-    const series = await queryItemSeries(creatorId, itemExternalId, 'all')
+    const series = await queryItemSeries(creatorId, itemExternalId, 'all', NOW)
 
     expect(series).toEqual([{ day: '2026-08-05', platform: 'youtube', metrics: { views: 500 } }])
   })
@@ -218,7 +256,11 @@ describe('queryChannelSeries — YouTube views read-time split (P-14)', () => {
       }),
     )
 
-    const series = await queryChannelSeries(creatorId, { platforms: ['youtube'], range: 'all' })
+    const series = await queryChannelSeries(creatorId, {
+      platforms: ['youtube'],
+      range: 'all',
+      now: NOW,
+    })
 
     expect(series).toEqual([
       { day: '2026-08-05', platform: 'youtube', metrics: { views: 12345, subscribers: 20 } },
@@ -240,7 +282,11 @@ describe('queryChannelSeries — YouTube views read-time split (P-14)', () => {
       }),
     )
 
-    const series = await queryChannelSeries(creatorId, { platforms: ['youtube'], range: 'all' })
+    const series = await queryChannelSeries(creatorId, {
+      platforms: ['youtube'],
+      range: 'all',
+      now: NOW,
+    })
 
     expect(series).toEqual([
       {
@@ -268,7 +314,11 @@ describe('queryChannelSeries — YouTube views read-time split (P-14)', () => {
       }),
     )
 
-    const series = await queryChannelSeries(creatorId, { platforms: ['youtube'], range: 'all' })
+    const series = await queryChannelSeries(creatorId, {
+      platforms: ['youtube'],
+      range: 'all',
+      now: NOW,
+    })
 
     expect(series).toEqual([
       {
@@ -289,7 +339,11 @@ describe('queryChannelSeries — YouTube views read-time split (P-14)', () => {
       }),
     )
 
-    const series = await queryChannelSeries(creatorId, { platforms: ['youtube'], range: 'all' })
+    const series = await queryChannelSeries(creatorId, {
+      platforms: ['youtube'],
+      range: 'all',
+      now: NOW,
+    })
 
     expect(series).toEqual([{ day: '2026-08-05', platform: 'youtube', metrics: {} }])
   })
@@ -341,7 +395,7 @@ describe('queryItemSeries', () => {
       }),
     )
 
-    const series = await queryItemSeries(creatorId, itemExternalId, 'all')
+    const series = await queryItemSeries(creatorId, itemExternalId, 'all', NOW)
 
     expect(series).toEqual([{ day: '2026-08-05', platform: 'twitch', metrics: { views: 150 } }])
   })
@@ -358,8 +412,8 @@ describe('queryItemSeries', () => {
       }),
     )
 
-    const sevenDay = await queryItemSeries(creatorId, itemExternalId, '7d')
-    const all = await queryItemSeries(creatorId, itemExternalId, 'all')
+    const sevenDay = await queryItemSeries(creatorId, itemExternalId, '7d', NOW)
+    const all = await queryItemSeries(creatorId, itemExternalId, 'all', NOW)
 
     expect(sevenDay).toHaveLength(0)
     expect(all).toHaveLength(1)

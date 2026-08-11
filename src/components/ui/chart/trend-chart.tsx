@@ -5,7 +5,9 @@ import { line as d3Line } from 'd3-shape'
 import { segmentSeries, type ChartPoint } from '@/components/ui/chart/segment'
 import { makeScales, TICK_COUNT } from '@/components/ui/chart/scales'
 import { nearestPoint } from '@/components/ui/chart/nearest'
-import type { RangePreset } from '@/lib/metrics/query'
+import { SERIES_COLOR } from '@/components/ui/chart/series-color'
+import { NUMBER_FORMAT } from '@/lib/format'
+import type { RangePreset } from '@/lib/metrics/range'
 
 const VIEWBOX_WIDTH = 640
 const VIEWBOX_HEIGHT = 260
@@ -27,7 +29,6 @@ const LEGEND_MIN_SERIES = 2
 const PERCENT = 100
 
 const GAP_LABEL = '—'
-const NUMBER_FORMAT = new Intl.NumberFormat('en-US')
 const DAY_FORMAT = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
   month: 'short',
@@ -38,11 +39,6 @@ export interface TrendSeries {
   readonly id: 'twitch' | 'youtube'
   readonly label: string
   readonly points: readonly ChartPoint[]
-}
-
-export const SERIES_COLOR: Readonly<Record<TrendSeries['id'], string>> = {
-  twitch: 'var(--series-twitch)',
-  youtube: 'var(--series-youtube)',
 }
 
 export interface TrendChartProps {
@@ -121,10 +117,15 @@ export function TrendChart(props: TrendChartProps): React.JSX.Element {
     entry,
     segments: segmentSeries(entry.points),
   }))
+  // The x axis spans every day the caller handed over, gaps included — the same
+  // `days` the sr-only table below enumerates. Left to the segment extent it
+  // would span only the days carrying a reading, so a range whose ingest starts
+  // late would draw identically at every preset and the picker would look dead.
   const { x, y } = makeScales(
     plotted.flatMap((item) => item.segments),
     PLOT_WIDTH,
     PLOT_HEIGHT,
+    [days[0], days[days.length - 1]],
   )
 
   // segmentSeries only ever pushes points with v !== null into a segment, so

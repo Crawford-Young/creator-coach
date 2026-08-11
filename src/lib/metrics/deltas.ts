@@ -7,7 +7,7 @@ export type MetricKind = 'point' | 'daily'
 // absent are the ones no kind describes: `ccv` is an instantaneous gauge and
 // `avgViewDurationSec` a daily average — summing or subtracting either is
 // nonsense, so `computeDeltas` reports nothing for them rather than guessing.
-export const METRIC_KINDS: Readonly<Partial<Record<string, MetricKind>>> = {
+export const METRIC_KINDS = {
   followers: 'point',
   subscribers: 'point',
   views: 'point',
@@ -16,13 +16,44 @@ export const METRIC_KINDS: Readonly<Partial<Record<string, MetricKind>>> = {
   comments: 'point',
   watchTimeMin: 'daily',
   subscribersGained: 'daily',
-}
+} as const satisfies Readonly<Record<string, MetricKind>>
 
-export interface MetricDelta {
+/**
+ * A metric key this module knows how to classify — and therefore the only kind
+ * of key a card may chart. Typing a card's metric keys as `MetricKey` is what
+ * makes an unclassified metric a compile error at the card: it would otherwise
+ * produce no delta entry, and the whole metric block would vanish from the
+ * rendered card with nothing failing.
+ */
+export type MetricKey = keyof typeof METRIC_KINDS
+
+// The classification read as a lookup: `computeDeltas` receives metric names as
+// plain strings off a snapshot document, which is exactly the untrusted-key
+// case the literal-keyed type above must NOT accept.
+const KIND_BY_KEY: Readonly<Partial<Record<string, MetricKind>>> = METRIC_KINDS
+
+/** A cumulative running total: endpoints and the growth between them. */
+export interface PointDelta {
+  readonly kind: 'point'
   readonly first: number
   readonly last: number
   readonly delta: number
 }
+
+/** A per-day value: the range's sum, with no endpoints worth reporting. */
+export interface DailyTotal {
+  readonly kind: 'daily'
+  readonly total: number
+}
+
+/**
+ * Discriminated on `kind` so a consumer cannot read a range SUM as if it were
+ * growth: the two shapes share no numeric field name, and TypeScript forces
+ * the branch. A flat `{first,last,delta}` carrying both meanings made
+ * correctness depend on the caller re-consulting `METRIC_KINDS` — an
+ * obligation the type never stated, and one a new consumer inherits silently.
+ */
+export type MetricDelta = PointDelta | DailyTotal
 
 /**
  * Computes per-platform, per-metric deltas over a day-ascending series
@@ -37,9 +68,8 @@ export interface MetricDelta {
  *
  * Daily metrics (watchTimeMin/subscribersGained) are per-day values, not
  * running totals — a first-minus-last delta would be meaningless for them,
- * so `delta` is instead the SUM across every day the metric appears, and
- * `first`/`last` are both 0-anchored (there is no single first/last
- * day-value pair worth reporting for a summed range).
+ * so they report `{ kind: 'daily', total }`, the SUM across every day the
+ * metric appears.
  *
  * A key absent from `METRIC_KINDS` yields NO entry at all — a platform whose
  * series carries only unclassified keys still appears, mapped to an empty
@@ -53,19 +83,19 @@ export function computeDeltas(
   for (const point of series) {
     const platformMetrics = (result[point.platform] ??= {})
     for (const [metric, value] of Object.entries(point.metrics)) {
-      const kind = METRIC_KINDS[metric]
+      const kind = KIND_BY_KEY[metric]
       if (kind === undefined) {
         continue
       }
       const existing = platformMetrics[metric]
       if (kind === 'daily') {
-        platformMetrics[metric] = existing
-          ? { first: 0, last: 0, delta: existing.delta + value }
-          : { first: 0, last: 0, delta: value }
+        const running = existing?.kind === 'daily' ? existing.total : 0
+        platformMetrics[metric] = { kind: 'daily', total: running + value }
       } else {
-        platformMetrics[metric] = existing
-          ? { first: existing.first, last: value, delta: value - existing.first }
-          : { first: value, last: value, delta: 0 }
+        platformMetrics[metric] =
+          existing?.kind === 'point'
+            ? { kind: 'point', first: existing.first, last: value, delta: value - existing.first }
+            : { kind: 'point', first: value, last: value, delta: 0 }
       }
     }
   }

@@ -11,7 +11,7 @@ describe('TICK_COUNT', () => {
 })
 
 describe('makeScales', () => {
-  it('x domain spans the min/max t across all segments; range is [0, width]', () => {
+  it("'extent' spans the min/max t across all segments; range is [0, width]", () => {
     const segments: ChartPoint[][] = [
       [
         { t: 0, v: 10 },
@@ -20,9 +20,26 @@ describe('makeScales', () => {
       [{ t: 2 * DAY_MS, v: 30 }],
     ]
 
-    const { x } = makeScales(segments, 300, 150)
+    const { x } = makeScales(segments, 300, 150, 'extent')
 
     expect(x.domain().map((d) => d.getTime())).toEqual([0, 2 * DAY_MS])
+    expect(x.range()).toEqual([0, 300])
+  })
+
+  // The extent rule is right for a sparkline and wrong for a dated chart: a
+  // caller drawing a fixed day window has to be able to say so, or the window
+  // it asked for collapses onto whatever days happened to carry a reading.
+  it('honours an explicit x domain, so a caller can span days its points never reached', () => {
+    const segments: ChartPoint[][] = [
+      [
+        { t: 5 * DAY_MS, v: 10 },
+        { t: 6 * DAY_MS, v: 20 },
+      ],
+    ]
+
+    const { x } = makeScales(segments, 300, 150, [0, 6 * DAY_MS])
+
+    expect(x.domain().map((d) => d.getTime())).toEqual([0, 6 * DAY_MS])
     expect(x.range()).toEqual([0, 300])
   })
 
@@ -34,7 +51,7 @@ describe('makeScales', () => {
       ],
     ]
 
-    const { y } = makeScales(segments, 300, 150)
+    const { y } = makeScales(segments, 300, 150, 'extent')
 
     expect(y.domain()).toEqual([40, 100])
     expect(y.range()).toEqual([150, 0])
@@ -48,7 +65,7 @@ describe('makeScales', () => {
       ],
     ]
 
-    const { y } = makeScales(segments, 300, 212)
+    const { y } = makeScales(segments, 300, 212, 'extent')
 
     expect(y.domain()).toEqual([12000, 12080])
     // At [0, max] the same data would compress to a ~1px sliver; at data
@@ -58,7 +75,7 @@ describe('makeScales', () => {
   })
 
   it('an empty segments array falls back to a finite, non-NaN domain on both scales', () => {
-    const { x, y } = makeScales([], 300, 150)
+    const { x, y } = makeScales([], 300, 150, 'extent')
 
     expect(Number.isFinite(x.domain()[0]?.getTime())).toBe(true)
     expect(Number.isFinite(x.domain()[1]?.getTime())).toBe(true)
@@ -70,7 +87,7 @@ describe('makeScales', () => {
   it('a single-point segment pads the y-domain so the point sits mid-height, not on a zero-height domain', () => {
     const segments: ChartPoint[][] = [[{ t: 5, v: 7 }]]
 
-    const { x, y } = makeScales(segments, 300, 150)
+    const { x, y } = makeScales(segments, 300, 150, 'extent')
 
     expect(x.domain().map((d) => d.getTime())).toEqual([5, 5])
     expect(y.domain()).toEqual([6, 8])
@@ -86,7 +103,7 @@ describe('makeScales', () => {
       ],
     ]
 
-    const { y } = makeScales(segments, 300, 150)
+    const { y } = makeScales(segments, 300, 150, 'extent')
 
     expect(y.domain()).toEqual([47.5, 52.5])
     expect(y.domain()[1]).toBeGreaterThan(y.domain()[0])
@@ -100,7 +117,7 @@ describe('makeScales', () => {
       ],
     ]
 
-    const { y } = makeScales(segments, 300, 150)
+    const { y } = makeScales(segments, 300, 150, 'extent')
 
     expect(y.domain()).toEqual([-1, 1])
     expect(y.domain()[1]).toBeGreaterThan(y.domain()[0])
