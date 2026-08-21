@@ -13,7 +13,7 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with: { node-version: 22, cache: pnpm }
-      - uses: extractions/setup-just@v2
+      - uses: extractions/setup-just@v4
       - run: pnpm install --frozen-lockfile
         env:
           SKIP_ENV_VALIDATION: true
@@ -32,7 +32,7 @@ jobs:
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with: { node-version: 22, cache: pnpm }
-      - uses: extractions/setup-just@v2
+      - uses: extractions/setup-just@v4
       - run: pnpm install --frozen-lockfile
         env:
           SKIP_ENV_VALIDATION: true
