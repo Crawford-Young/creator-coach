@@ -71,6 +71,25 @@ describe('getPersonaProfile', () => {
     expect(result).toEqual(personaProfileSchema.parse(validProfile))
   })
 
+  // Tenant isolation: another creator's profile is never visible to the session creator.
+  it("never returns another creator's profile", async () => {
+    const sessionCreatorId = randomUUID()
+    const otherCreatorId = randomUUID()
+    const now = new Date()
+    await collections().personaProfiles.insertOne({
+      _id: new ObjectId(),
+      creatorId: otherCreatorId,
+      archetype: validProfile.identity.archetype,
+      timezone: validProfile.constraints.timezone,
+      data: validProfile,
+      createdAt: now,
+      updatedAt: now,
+    })
+    mockRequireCreator.mockResolvedValueOnce({ id: sessionCreatorId })
+
+    await expect(getPersonaProfile()).resolves.toBeNull()
+  })
+
   it('propagates a requireCreator failure', async () => {
     const authError = new Error('Not authenticated')
     mockRequireCreator.mockRejectedValueOnce(authError)

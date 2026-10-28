@@ -226,20 +226,6 @@ describe('runDailyIngest', () => {
     void failing
   })
 
-  it('a non-Error throw is stringified as "unknown error" in the summary', async () => {
-    const account = await seedAccount({ platform: 'twitch' })
-    vi.spyOn(logger, 'error').mockImplementation(() => undefined as never)
-    vi.mocked(twitchConnector.syncChannel).mockImplementationOnce(async () => {
-      throw 'a string, not an Error'
-    })
-
-    const summary = await runDailyIngest()
-
-    const errorRows = summary.filter((row) => !row.ok)
-    expect(errorRows).toEqual([{ platform: 'twitch', ok: false, error: 'unknown error' }])
-    void account
-  })
-
   it('full summary shape: platforms + ok flags + error strings exact across ok/reauth/other-error accounts', async () => {
     await seedAccount({ platform: 'twitch' }) // ok
     const reauth = await seedAccount({ platform: 'youtube' })

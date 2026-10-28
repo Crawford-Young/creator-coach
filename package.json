@@ -51,6 +51,8 @@
     "@commitlint/types": "^21.2.0",
     "@eslint/compat": "^2.1.0",
     "@playwright/test": "^1.62.1",
+    "@stryker-mutator/core": "^10.1.1",
+    "@stryker-mutator/vitest-runner": "^10.1.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/jest-dom": "6.9.1",
     "@testing-library/react": "^16.3.2",

@@ -18,6 +18,10 @@ export const GOOGLE_LINK_SCOPES = [
 ]
 
 export const GOOGLE_STATE_COOKIE = 'google_link_state'
+// The cookie is scoped to the google connection routes only. Deleting it must
+// pass this same path: a browser treats a Path=/ deletion as a different
+// cookie and keeps the real one alive until max-age runs out.
+export const GOOGLE_STATE_COOKIE_PATH = '/api/connections/google'
 export const GOOGLE_STATE_COOKIE_MAX_AGE_SECONDS = 600 // ~10 minutes, enough to complete the consent redirect round trip
 
 const YOUTUBE_PLATFORM = 'youtube'

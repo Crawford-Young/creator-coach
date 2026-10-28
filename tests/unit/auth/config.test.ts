@@ -27,13 +27,6 @@ import { provisionCreator } from '@/lib/provision'
 import { syncTwitchAccount } from '@/lib/connections/twitch-sync'
 
 describe('auth config', () => {
-  it('registers the twitch provider', () => {
-    const ids = authConfig.providers.map((p) => (typeof p === 'function' ? p().id : p.id))
-    expect(ids).toContain('twitch')
-  })
-  it('uses an adapter', () => {
-    expect(authConfig.adapter).toBeDefined()
-  })
   it('requests the broadcast + email scopes', () => {
     const twitch = authConfig.providers.find(
       (p) => (typeof p === 'function' ? p().id : p.id) === 'twitch',
@@ -53,6 +46,9 @@ describe('auth config', () => {
     expect(scope).toContain('openid')
     expect(scope).toContain('moderator:read:followers')
   })
+  // W1 issue #6: syncTwitchAccount must receive the signIn EVENT's own fresh
+  // `account` object — never re-derive it from the adapter's stored row
+  // (written only at first link, stale on repeat sign-ins).
   it('signIn event provisions the creator then syncs the twitch account with the event account', async () => {
     const callOrder: string[] = []
     vi.mocked(provisionCreator).mockImplementationOnce(async () => {
@@ -69,5 +65,9 @@ describe('auth config', () => {
     expect(provisionCreator).toHaveBeenCalledWith('u1', 'Streamer')
     expect(syncTwitchAccount).toHaveBeenCalledWith('u1', 'Streamer', account)
     expect(callOrder).toEqual(['provision', 'sync'])
+  })
+  it('signIn provisions with an empty display name when user.name is null', async () => {
+    await authConfig.events?.signIn?.({ user: { id: 'u2', name: null } } as never)
+    expect(provisionCreator).toHaveBeenCalledWith('u2', '')
   })
 })

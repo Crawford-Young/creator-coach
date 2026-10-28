@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
 
-const TEST_KEY = Buffer.alloc(32, 7).toString('base64')
 vi.mock('@/env', () => ({ env: { TOKEN_ENC_KEY: Buffer.alloc(32, 7).toString('base64') } }))
 
 import { encryptToken, decryptToken, isEncrypted, ENCRYPTION_PREFIX } from '@/lib/token-crypto'
@@ -35,10 +34,6 @@ describe('token-crypto', () => {
   it('isEncrypted discriminates', () => {
     expect(isEncrypted(encryptToken('x'))).toBe(true)
     expect(isEncrypted('plain')).toBe(false)
-  })
-
-  it('TEST_KEY sanity: 32 bytes', () => {
-    expect(Buffer.from(TEST_KEY, 'base64').length).toBe(32)
   })
 
   it('rejects a key of wrong length', async () => {

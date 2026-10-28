@@ -18,6 +18,8 @@ const eslintConfig = [
       'coverage/**',
       'playwright-report/**',
       'test-results/**',
+      'reports/**',
+      '.stryker-tmp/**',
     ],
   },
   // eslint-config-next 16 ships native flat configs — FlatCompat over the

@@ -85,6 +85,26 @@ describe('savePersonaProfile', () => {
     expect(second?.updatedAt.getTime()).toBeGreaterThan(first?.updatedAt.getTime() ?? 0)
   })
 
+  // Tenant isolation: a save writes only the session creator's document.
+  it("never overwrites another creator's profile", async () => {
+    const creatorA = randomUUID()
+    const creatorB = randomUUID()
+    mockRequireCreator.mockResolvedValueOnce({ id: creatorB })
+    await savePersonaProfile(validProfile)
+    const before = await collections().personaProfiles.findOne({ creatorId: creatorB })
+
+    mockRequireCreator.mockResolvedValueOnce({ id: creatorA })
+    await savePersonaProfile({
+      ...validProfile,
+      philosophy: { ...validProfile.philosophy, statement: 'creator A only' },
+    })
+
+    const after = await collections().personaProfiles.findOne({ creatorId: creatorB })
+    expect(after).toEqual(before)
+    const own = await collections().personaProfiles.findOne({ creatorId: creatorA })
+    expect(own?.data.philosophy.statement).toBe('creator A only')
+  })
+
   it('propagates a requireCreator failure and does not insert a document', async () => {
     const authError = new Error('Not authenticated')
     mockRequireCreator.mockRejectedValueOnce(authError)

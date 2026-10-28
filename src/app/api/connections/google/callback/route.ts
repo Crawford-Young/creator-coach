@@ -4,6 +4,7 @@ import {
   handleGoogleCallback,
   StateMismatchError,
   GOOGLE_STATE_COOKIE,
+  GOOGLE_STATE_COOKIE_PATH,
 } from '@/lib/connections/google-link'
 import { logger } from '@/lib/logger'
 
@@ -33,11 +34,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       'google callback link failed',
     )
     const response = NextResponse.redirect(new URL('/?googleLinkError=1', request.url))
-    response.cookies.delete(GOOGLE_STATE_COOKIE)
+    response.cookies.delete({ name: GOOGLE_STATE_COOKIE, path: GOOGLE_STATE_COOKIE_PATH })
     return response
   }
 
   const response = NextResponse.redirect(new URL('/', request.url))
-  response.cookies.delete(GOOGLE_STATE_COOKIE)
+  response.cookies.delete({ name: GOOGLE_STATE_COOKIE, path: GOOGLE_STATE_COOKIE_PATH })
   return response
 }

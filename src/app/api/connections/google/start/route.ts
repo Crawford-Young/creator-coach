@@ -5,6 +5,7 @@ import {
   generateState,
   GOOGLE_STATE_COOKIE,
   GOOGLE_STATE_COOKIE_MAX_AGE_SECONDS,
+  GOOGLE_STATE_COOKIE_PATH,
 } from '@/lib/connections/google-link'
 import { env } from '@/env'
 
@@ -25,7 +26,7 @@ export async function GET(): Promise<NextResponse> {
     sameSite: 'lax',
     secure: env.NODE_ENV === 'production',
     maxAge: GOOGLE_STATE_COOKIE_MAX_AGE_SECONDS,
-    path: '/api/connections/google',
+    path: GOOGLE_STATE_COOKIE_PATH,
   })
   return response
 }

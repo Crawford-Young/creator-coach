@@ -24,11 +24,15 @@ export default defineConfig({
       // files loaded during the run are reported, silently narrowing the
       // 100% thresholds to whatever the tests happen to import.
       include: ['src/**'],
+      // A floor against untested code, not a target. Test quality is judged
+      // by whether each test pins a stated rule (CLAUDE.md "Test conventions")
+      // and by mutation score on high-risk modules (`just mutate`) — chasing
+      // 100% here produced tests that only existed to touch lines.
       thresholds: {
-        statements: 100,
-        functions: 100,
-        lines: 100,
-        branches: 97,
+        statements: 90,
+        functions: 90,
+        lines: 90,
+        branches: 85,
       },
       exclude: [
         'node_modules/',

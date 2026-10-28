@@ -16,6 +16,10 @@ lint:
 typecheck:
     pnpm tsc --noEmit
 
+# Mutation testing on the high-risk modules (stryker.config.mjs). Local only for now.
+mutate:
+    pnpm stryker run
+
 check: lint typecheck test e2e
 
 db-indexes:
