@@ -7,6 +7,11 @@ updates:
     groups:
       dependencies:
         patterns: ['*']
+    ignore:
+      # A TypeScript major is its own migration (claude-config#111): TS 7 breaks
+      # typescript-eslint, and in the grouped PR it turns every other bump red.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:
