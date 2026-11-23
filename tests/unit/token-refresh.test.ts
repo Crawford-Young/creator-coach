@@ -5,11 +5,11 @@ import { collections, type PlatformAccountDoc } from '@/db'
 import { decryptToken, encryptToken } from '@/lib/token-crypto'
 import { env } from '@/env'
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
+vi.mock('@/lib/report-error', () => ({
+  reportError: vi.fn(),
 }))
 
-import * as Sentry from '@sentry/nextjs'
+import { reportError } from '@/lib/report-error'
 import {
   getFreshTwitchToken,
   getFreshGoogleToken,
@@ -84,7 +84,7 @@ async function readBack(id: ObjectId): Promise<PlatformAccountDoc> {
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  vi.mocked(Sentry.captureException).mockClear()
+  vi.mocked(reportError).mockClear()
 })
 
 describe('getFreshTwitchToken / getFreshGoogleToken — fresh token, no refresh', () => {
@@ -196,7 +196,7 @@ describe('freshness edge cases', () => {
 })
 
 describe('refresh failure -> reauth_required', () => {
-  it('twitch: 401 from the refresh endpoint flips status, reports to Sentry, and throws ReauthRequiredError', async () => {
+  it('twitch: 401 from the refresh endpoint flips status, reports via reportError, and throws ReauthRequiredError', async () => {
     const account = await seedAccount({ platform: 'twitch', tokenExpiresAt: futureDate(-60) })
     mockFetchSequence([{ ok: false, status: 401, body: { message: 'Invalid refresh token' } }])
 
@@ -204,10 +204,10 @@ describe('refresh failure -> reauth_required', () => {
 
     const doc = await readBack(account._id)
     expect(doc.status).toBe('reauth_required')
-    expect(Sentry.captureException).toHaveBeenCalledTimes(1)
+    expect(reportError).toHaveBeenCalledTimes(1)
   })
 
-  it('google: 401 from the refresh endpoint flips status, reports to Sentry, and throws ReauthRequiredError', async () => {
+  it('google: 401 from the refresh endpoint flips status, reports via reportError, and throws ReauthRequiredError', async () => {
     const account = await seedAccount({ platform: 'youtube', tokenExpiresAt: futureDate(-60) })
     mockFetchSequence([{ ok: false, status: 401, body: { error: 'invalid_grant' } }])
 
@@ -215,7 +215,7 @@ describe('refresh failure -> reauth_required', () => {
 
     const doc = await readBack(account._id)
     expect(doc.status).toBe('reauth_required')
-    expect(Sentry.captureException).toHaveBeenCalledTimes(1)
+    expect(reportError).toHaveBeenCalledTimes(1)
   })
 
   it('expired token with no stored refreshToken flips to reauth_required without calling fetch', async () => {
@@ -231,7 +231,7 @@ describe('refresh failure -> reauth_required', () => {
     expect(fetchMock).not.toHaveBeenCalled()
     const doc = await readBack(account._id)
     expect(doc.status).toBe('reauth_required')
-    expect(Sentry.captureException).toHaveBeenCalledTimes(1)
+    expect(reportError).toHaveBeenCalledTimes(1)
   })
 
   it('a schema-violating refresh response also flips to reauth_required', async () => {

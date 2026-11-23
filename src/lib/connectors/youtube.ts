@@ -1,4 +1,4 @@
-import * as Sentry from '@sentry/nextjs'
+import { reportError } from '@/lib/report-error'
 import { z } from 'zod'
 import {
   collections,
@@ -178,7 +178,7 @@ async function collectUploadedVideoIds(
     for (const rawItem of parsed.data.items) {
       const itemParsed = playlistItemSchema.safeParse(rawItem)
       if (!itemParsed.success) {
-        Sentry.captureException(itemParsed.error)
+        reportError(itemParsed.error)
         continue
       }
       videoIds.push(itemParsed.data.snippet.resourceId.videoId)
@@ -210,7 +210,7 @@ async function fetchVideosBatch(account: PlatformAccountDoc, ids: string[]): Pro
   for (const rawItem of parsed.data.items) {
     const itemParsed = videoItemSchema.safeParse(rawItem)
     if (!itemParsed.success) {
-      Sentry.captureException(itemParsed.error)
+      reportError(itemParsed.error)
       continue
     }
     videos.push(itemParsed.data)
@@ -278,7 +278,7 @@ async function syncContent(account: PlatformAccountDoc): Promise<void> {
       // Same per-item skip pattern as schema-validation failures above —
       // one video with an unparseable duration must not abort the whole
       // sync run.
-      Sentry.captureException(error)
+      reportError(error)
       continue
     }
 
@@ -321,7 +321,7 @@ async function syncMetrics(account: PlatformAccountDoc, items: ContentItemDoc[])
   for (const item of items) {
     const video = videoById.get(item.externalId)
     if (!video) {
-      // Missing from the response — already reported to Sentry by
+      // Missing from the response — already reported (reportError) by
       // fetchVideosBatch if it was malformed; genuinely absent items are
       // skipped silently (e.g. deleted upstream since the last sync).
       continue

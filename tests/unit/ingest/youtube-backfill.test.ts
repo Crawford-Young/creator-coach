@@ -4,11 +4,11 @@ import { ObjectId } from 'mongodb'
 import { collections, type PlatformAccountDoc } from '@/db'
 import { encryptToken } from '@/lib/token-crypto'
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
+vi.mock('@/lib/report-error', () => ({
+  reportError: vi.fn(),
 }))
 
-import * as Sentry from '@sentry/nextjs'
+import { reportError } from '@/lib/report-error'
 import {
   backfillYouTubeChannel,
   BACKFILL_CHUNK_DAYS,
@@ -95,7 +95,7 @@ const DEFAULT_COLUMN_HEADERS = [
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  vi.mocked(Sentry.captureException).mockClear()
+  vi.mocked(reportError).mockClear()
 })
 
 describe('chunk math', () => {

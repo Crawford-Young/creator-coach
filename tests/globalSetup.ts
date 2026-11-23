@@ -13,8 +13,6 @@ const TEST_ENV_DEFAULTS: Record<string, string> = {
   AUTH_GOOGLE_SECRET: 'test-google-secret',
   TOKEN_ENC_KEY: Buffer.alloc(32, 2).toString('base64'),
   CRON_SECRET: 'test-cron-secret',
-  SENTRY_DSN: 'https://test@o0.ingest.sentry.io/0',
-  SENTRY_AUTH_TOKEN: 'test-sentry-auth-token',
   NEXT_PUBLIC_APP_URL: 'http://localhost:3000',
 }
 

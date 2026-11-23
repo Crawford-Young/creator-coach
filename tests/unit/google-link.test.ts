@@ -9,11 +9,11 @@ import { env } from '@/env'
 vi.mock('@/lib/ingest/youtube-backfill', () => ({
   backfillYouTubeChannel: vi.fn().mockResolvedValue({ daysWritten: 0, daysSkipped: 0, chunks: 0 }),
 }))
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
+vi.mock('@/lib/report-error', () => ({
+  reportError: vi.fn(),
 }))
 
-import * as Sentry from '@sentry/nextjs'
+import { reportError } from '@/lib/report-error'
 import { backfillYouTubeChannel } from '@/lib/ingest/youtube-backfill'
 import {
   buildGoogleAuthUrl,
@@ -93,7 +93,7 @@ async function flushMicrotasks(): Promise<void> {
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.mocked(backfillYouTubeChannel).mockClear()
-  vi.mocked(Sentry.captureException).mockClear()
+  vi.mocked(reportError).mockClear()
 })
 
 describe('generateState', () => {
@@ -336,7 +336,7 @@ describe('handleGoogleCallback', () => {
     expect(doc).toBeNull()
   })
 
-  it('reports a backfill failure to Sentry without failing the link callback', async () => {
+  it('reports a backfill failure via reportError without failing the link callback', async () => {
     const { creatorId } = await seedCreator()
     mockFetchSequence([{ body: fixtureTokenResponse() }, { body: fixtureChannelsResponse() }])
     vi.mocked(backfillYouTubeChannel).mockRejectedValueOnce(new Error('backfill boom'))
@@ -345,7 +345,7 @@ describe('handleGoogleCallback', () => {
     await flushMicrotasks() // let the .catch() handler execute for coverage
 
     expect(backfillYouTubeChannel).toHaveBeenCalledTimes(1)
-    expect(Sentry.captureException).toHaveBeenCalledTimes(1)
+    expect(reportError).toHaveBeenCalledTimes(1)
 
     const doc = await collections().platformAccounts.findOne({ creatorId, platform: 'youtube' })
     expect(doc).not.toBeNull()

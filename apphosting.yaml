@@ -1,0 +1,55 @@
+# Firebase App Hosting (Cloud Run underneath). Prep for the GCP move: Vercel
+# keeps deploying until the cutover, and nothing here affects it.
+# Schema: https://firebase.google.com/docs/app-hosting/configure
+#
+# src/env.ts (t3-env) validates every required var at build AND at runtime, so
+# each one is available in both phases. Create each secret with
+# `firebase apphosting:secrets:set <name>`.
+
+runConfig:
+  # Scale to zero between visits. The daily ingest is one Cloud Scheduler call,
+  # so a cold start there costs nothing that matters.
+  minInstances: 0
+  maxInstances: 4
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 1024
+
+env:
+  - variable: MONGODB_URI
+    secret: mongodb-uri
+    availability: [BUILD, RUNTIME]
+  - variable: MONGODB_DB
+    value: creator-coach
+    availability: [BUILD, RUNTIME]
+  - variable: AUTH_SECRET
+    secret: auth-secret
+    availability: [BUILD, RUNTIME]
+  # Auth.js trusts the Host header only on Vercel unless told to. Without this,
+  # every sign-in on Cloud Run fails with UntrustedHost.
+  - variable: AUTH_TRUST_HOST
+    value: 'true'
+    availability: [RUNTIME]
+  - variable: AUTH_TWITCH_ID
+    secret: auth-twitch-id
+    availability: [BUILD, RUNTIME]
+  - variable: AUTH_TWITCH_SECRET
+    secret: auth-twitch-secret
+    availability: [BUILD, RUNTIME]
+  - variable: AUTH_GOOGLE_ID
+    secret: auth-google-id
+    availability: [BUILD, RUNTIME]
+  - variable: AUTH_GOOGLE_SECRET
+    secret: auth-google-secret
+    availability: [BUILD, RUNTIME]
+  - variable: TOKEN_ENC_KEY
+    secret: token-enc-key
+    availability: [BUILD, RUNTIME]
+  - variable: CRON_SECRET
+    secret: cron-secret
+    availability: [BUILD, RUNTIME]
+
+# NEXT_PUBLIC_APP_URL (the public origin, never localhost) goes in
+# apphosting.production.yaml or the backend settings. Leaving it out of this
+# file means a backend without it fails its build at env validation instead of
+# shipping a wrong origin.

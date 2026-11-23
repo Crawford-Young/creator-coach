@@ -1,4 +1,4 @@
-import * as Sentry from '@sentry/nextjs'
+import { reportError } from '@/lib/report-error'
 import { z } from 'zod'
 import { collections, type Platform, type PlatformAccountDoc } from '@/db'
 import { decryptToken, encryptToken } from '@/lib/token-crypto'
@@ -53,7 +53,7 @@ async function markReauthRequired(account: PlatformAccountDoc): Promise<never> {
     'token refresh: reauth required',
   )
   const error = new ReauthRequiredError(account.creatorId, account.platform)
-  Sentry.captureException(error)
+  reportError(error)
   throw error
 }
 
