@@ -7,9 +7,7 @@ const mongod = await MongoMemoryServer.create({ instance: { port: 27097 } })
 // `.env` leaves them blank cannot boot the dev server. Explicit env set here
 // beats `.env` in Next (same precedent as MONGODB_URI below), so this placeholder
 // keeps E2E independent of real Twitch credentials — the service is not
-// exercised by the seeded-session onboarding flow. The optional Sentry vars are
-// NOT overridden: a placeholder DSN fails SDK parsing and spams "Invalid Sentry
-// Dsn" on every run, while the real `.env` value no-ops in dev.
+// exercised by the seeded-session onboarding flow.
 const dev = spawn('pnpm', ['dev'], {
   stdio: 'inherit',
   shell: true,

@@ -11,7 +11,7 @@ AI-powered creator coaching companion — multi-tenant Next.js application.
 - **Database**: MongoDB Atlas + native `mongodb` driver v6 (no ODM — Zod validates documents)
 - **Auth**: Auth.js v5 with Twitch OAuth (`@auth/mongodb-adapter`, database sessions)
 - **Platform connectors**: Twitch Helix + YouTube Data/Analytics ingestion (see below)
-- **Error monitoring**: Sentry
+- **Error monitoring**: `reportError` (`src/lib/report-error.ts`) logs via Pino; on GCP that is Cloud Logging / Error Reporting
 - **Testing**: Vitest + Playwright (E2E on `mongodb-memory-server`)
 - **Deployment**: Vercel
 
@@ -28,7 +28,6 @@ AI-powered creator coaching companion — multi-tenant Next.js application.
    | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | Google Cloud OAuth 2.0 Web client for the YouTube link flow (redirect URI: `<origin>/api/connections/google/callback`; enable YouTube Data API v3 + YouTube Analytics API)                                                                                                                                                                                                                                                      |
    | `TOKEN_ENC_KEY`                         | 32-byte base64 key encrypting platform tokens at rest — `openssl rand -base64 32`                                                                                                                                                                                                                                                                                                                                               |
    | `CRON_SECRET`                           | Bearer token guarding `/api/cron/*` — `openssl rand -base64 32`. Also a Vercel env var at deploy.                                                                                                                                                                                                                                                                                                                               |
-   | `SENTRY_DSN` / `SENTRY_AUTH_TOKEN`      | Optional — Sentry project                                                                                                                                                                                                                                                                                                                                                                                                       |
    | `NEXT_PUBLIC_APP_URL`                   | Your app URL                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
    Blank lines in `.env` (`KEY=`) are treated as **unset**, not empty strings — env validation (`src/env.ts`) uses `emptyStringAsUndefined`, so optional vars can stay blank without failing startup.
@@ -67,7 +66,7 @@ AI-powered creator coaching companion — multi-tenant Next.js application.
 Platform data flows through a shared connector contract (`src/lib/connectors/types.ts`):
 
 - **`PlatformConnector`** — `syncChannel` (channel-level metric snapshot), `syncContent` (upsert content items), `syncMetrics` (per-item metric snapshots). Implemented by `twitchConnector` (`src/lib/connectors/twitch.ts`) and `youtubeConnector` (`src/lib/connectors/youtube.ts`); `checkLive` (Twitch CCV) is a standalone export.
-- **Tokens** are encrypted at rest (`src/lib/token-crypto.ts`, `v1:` AES-256-GCM format) and refreshed through `getFreshTwitchToken`/`getFreshGoogleToken` (`src/lib/connectors/token-refresh.ts`). A provider 401 forces one refresh-and-retry; a second 401 is a hard error. When the refresh grant itself is rejected, `ReauthRequiredError` flips the account to `reauth_required` and reports to Sentry — callers just skip the account.
+- **Tokens** are encrypted at rest (`src/lib/token-crypto.ts`, `v1:` AES-256-GCM format) and refreshed through `getFreshTwitchToken`/`getFreshGoogleToken` (`src/lib/connectors/token-refresh.ts`). A provider 401 forces one refresh-and-retry; a second 401 is a hard error. When the refresh grant itself is rejected, `ReauthRequiredError` flips the account to `reauth_required` and reports to reportError — callers just skip the account.
 - **Storage**: `contentItems` upserts on the unique `(platform, externalId)` index; `metricSnapshots` is a native MongoDB **time-series** collection (no upserts, no unique indexes possible) — idempotency is query-before-insert, owned by each writer.
 - **YouTube backfill**: linking a Google account fires `backfillYouTubeChannel` (fire-and-forget from the OAuth callback) — full channel-history day series from the YouTube Analytics API, chunked 365 days per request, skipping days already present so re-linking never duplicates the series.
 

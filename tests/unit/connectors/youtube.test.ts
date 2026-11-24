@@ -4,11 +4,11 @@ import { ObjectId } from 'mongodb'
 import { collections, type ContentItemDoc, type PlatformAccountDoc } from '@/db'
 import { encryptToken } from '@/lib/token-crypto'
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
+vi.mock('@/lib/report-error', () => ({
+  reportError: vi.fn(),
 }))
 
-import * as Sentry from '@sentry/nextjs'
+import { reportError } from '@/lib/report-error'
 import { YoutubeApiError, youtubeConnector } from '@/lib/connectors/youtube'
 
 import channelFixture from '../../fixtures/youtube/channel.json'
@@ -96,7 +96,7 @@ function idsFromUrl(urlStr: string): string[] {
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  vi.mocked(Sentry.captureException).mockClear()
+  vi.mocked(reportError).mockClear()
 })
 
 describe('syncChannel', () => {
@@ -421,7 +421,7 @@ describe('non-401 error responses', () => {
 })
 
 describe('unparseable duration', () => {
-  it('reports an unparseable ISO-8601 duration to Sentry and skips that item while siblings land', async () => {
+  it('reports an unparseable ISO-8601 duration via reportError and skips that item while siblings land', async () => {
     const account = await seedAccount({ uploadsPlaylistId: uniqueId('UUbadDuration') })
     const goodId = uniqueId('good-duration')
     const badId = uniqueId('bad-duration')
@@ -454,7 +454,7 @@ describe('unparseable duration', () => {
 
     await youtubeConnector.syncContent(account)
 
-    expect(Sentry.captureException).toHaveBeenCalled()
+    expect(reportError).toHaveBeenCalled()
     const good = await collections().contentItems.findOne({
       platform: 'youtube',
       externalId: goodId,
@@ -466,7 +466,7 @@ describe('unparseable duration', () => {
 })
 
 describe('malformed items', () => {
-  it('reports a malformed video item to Sentry and skips it while siblings land', async () => {
+  it('reports a malformed video item via reportError and skips it while siblings land', async () => {
     const account = await seedAccount({ uploadsPlaylistId: uniqueId('UUmalformedTest') })
     const goodId = uniqueId('good')
     const badId = uniqueId('bad')
@@ -495,7 +495,7 @@ describe('malformed items', () => {
 
     await youtubeConnector.syncContent(account)
 
-    expect(Sentry.captureException).toHaveBeenCalled()
+    expect(reportError).toHaveBeenCalled()
     const good = await collections().contentItems.findOne({
       platform: 'youtube',
       externalId: goodId,
@@ -505,7 +505,7 @@ describe('malformed items', () => {
     expect(bad).toBeNull()
   })
 
-  it('reports a malformed playlistItems entry to Sentry and skips it', async () => {
+  it('reports a malformed playlistItems entry via reportError and skips it', async () => {
     const account = await seedAccount({ uploadsPlaylistId: uniqueId('UUmalformedPlaylistItem') })
     const goodId = uniqueId('good-pl')
     const fetchMock = vi.fn(async (url: string) => {
@@ -525,7 +525,7 @@ describe('malformed items', () => {
 
     await youtubeConnector.syncContent(account)
 
-    expect(Sentry.captureException).toHaveBeenCalled()
+    expect(reportError).toHaveBeenCalled()
     const good = await collections().contentItems.findOne({
       platform: 'youtube',
       externalId: goodId,

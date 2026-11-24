@@ -6,6 +6,11 @@
 
 **User decision 2026-08-08** (spec: `~/code/docs/web/creator-coach/specs/2026-08-08-multiplatform-stats-dashboard-design.md`): this repo runs MongoDB Atlas with the native `mongodb` driver v6 — no Drizzle, no Neon, no Mongoose. Zod validates documents at boundaries. The web-domain "Neon + Drizzle" default does NOT apply here.
 
+## Error reporting and hosting (GCP move)
+
+- **`reportError` (`src/lib/report-error.ts`) is the one seam for handled errors** (report, then skip). Sentry was dropped ahead of the GCP move; `reportError` logs at `error` through Pino, which Cloud Logging and Error Reporting read on Cloud Run. Wire a reporting client in there, never at call sites. Tests mock `@/lib/report-error`.
+- **Hosting:** production is still Vercel. `apphosting.yaml` prepares Firebase App Hosting (Cloud Run underneath). Vercel's cron (`vercel.json`) has no App Hosting equivalent: at cutover, create a Cloud Scheduler job that sends `GET /api/cron/daily-ingest` daily at 06:00 UTC with `Authorization: Bearer <CRON_SECRET>`, then delete `vercel.json`. `engines.node` is `>=22`.
+
 ## Data layer conventions
 
 - **`collections()` accessors** (`src/db/index.ts`): all collection access goes through the typed `collections()` factory — never `getDb().collection('...')` inline. New collections: add the `*Doc` interface + entry there.
@@ -17,8 +22,8 @@
 
 - **`PlatformConnector` contract** (`src/lib/connectors/types.ts`): `syncChannel`/`syncContent`/`syncMetrics(account, items)`. New platforms implement it and register in `run-daily.ts`'s `CONNECTORS` map; `checkLive` (Twitch) is a standalone export, not part of the contract.
 - **`metricSnapshots` is a native time-series collection — NO upserts, NO unique indexes.** Write-path idempotency is query-before-insert, owned by each writer (backfill queries existing day keys; daily sync just inserts — a re-run within a day adds a second same-day snapshot by design). Never add an upsert or unique index against it; the driver/server will reject them.
-- **Token discipline**: platform tokens are AES-256-GCM encrypted at rest (`src/lib/token-crypto.ts`, `v1:` prefix; un-prefixed values pass through as legacy). Connectors get plaintext tokens ONLY via `getFreshTwitchToken`/`getFreshGoogleToken(account, {forceRefresh?})` — in-memory, never persisted or logged (logger calls carry ids only). Provider 401 → one `forceRefresh` retry → second 401 is a hard error. `ReauthRequiredError` already flips account status + captures to Sentry at refresh time — callers catch it and continue, never re-capture.
-- **External API responses are Zod-validated per item**: envelope failure = typed error; per-item failure = Sentry + skip, never abort the run. Any non-OK ≠401 response throws a TYPED error carrying the status — parsing a non-OK body as payload masks quota errors (T8 review Major).
+- **Token discipline**: platform tokens are AES-256-GCM encrypted at rest (`src/lib/token-crypto.ts`, `v1:` prefix; un-prefixed values pass through as legacy). Connectors get plaintext tokens ONLY via `getFreshTwitchToken`/`getFreshGoogleToken(account, {forceRefresh?})` — in-memory, never persisted or logged (logger calls carry ids only). Provider 401 → one `forceRefresh` retry → second 401 is a hard error. `ReauthRequiredError` already flips account status + reports (`reportError`) at refresh time — callers catch it and continue, never re-capture.
+- **External API responses are Zod-validated per item**: envelope failure = typed error; per-item failure = `reportError` + skip, never abort the run. Any non-OK ≠401 response throws a TYPED error carrying the status — parsing a non-OK body as payload masks quota errors (T8 review Major).
 - **Multi-id request params are chunked at the provider's page size** (Twitch `HELIX_PAGE_SIZE` 100, YouTube `YT_VIDEOS_BATCH_SIZE` 50) — unchunked >limit requests silently truncate (T7 review Major).
 - **Cron surfaces**: `/api/cron/daily-ingest` (Vercel cron, `vercel.json`) and `/api/cron/live-poll` (no scheduler since 2026-08-21 — the GH Actions live-poll workflow was removed after failing on every run with `APP_URL` unset; the route stays for manual/future scheduling, and the LIVE badge is dormant until one exists). Both guarded by `Authorization: Bearer <CRON_SECRET>` with a constant-time compare (sha256 digests + `timingSafeEqual`). Routes stay thin — logic lives in `src/lib/ingest/`.
 
@@ -45,7 +50,7 @@
 ## Scaffold status
 
 - **Storybook removed in W0** (zero stories, preview build dead on SB8.6 + Next 15.5). W2 re-adds Storybook 9 with the first dashboard component — restore the `just storybook` recipe + DoD story requirement then.
-- CI `pnpm audit --audit-level=high` is blocking (escape hatch removed in the dep-housekeeping wave, 2026-08-09). Transitive pins live in `pnpm-workspace.yaml` `overrides` (pnpm 11 dropped the package.json `pnpm` field) — currently `fast-uri: 3.1.5` via the sentry→webpack chain; drop when the chain floors it.
+- CI `pnpm audit --audit-level=high` is blocking (escape hatch removed in the dep-housekeeping wave, 2026-08-09). Transitive pins live in `pnpm-workspace.yaml` `overrides` (pnpm 11 dropped the package.json `pnpm` field) — currently `fast-uri` via ajv; drop when the chain floors it.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

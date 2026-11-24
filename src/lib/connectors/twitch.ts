@@ -1,4 +1,4 @@
-import * as Sentry from '@sentry/nextjs'
+import { reportError } from '@/lib/report-error'
 import { z } from 'zod'
 import { collections, type ContentItemDoc, type ContentType, type PlatformAccountDoc } from '@/db'
 import { getFreshTwitchToken } from '@/lib/connectors/token-refresh'
@@ -176,7 +176,7 @@ interface ParsedListItem<T> {
 
 /**
  * Validates each item in a Twitch list response independently. A malformed
- * item is reported to Sentry and skipped — it never aborts the whole run.
+ * item is reported (reportError) and skipped — it never aborts the whole run.
  */
 function parseListItems<T>(
   rawItems: unknown[],
@@ -191,7 +191,7 @@ function parseListItems<T>(
       items.push({ raw, data: parsed.data })
     } else {
       logger.warn({ creatorId, itemKind }, 'twitch: skipping malformed list item')
-      Sentry.captureException(new Error(`Twitch ${itemKind} item failed schema validation`))
+      reportError(new Error(`Twitch ${itemKind} item failed schema validation`))
     }
   }
   return items

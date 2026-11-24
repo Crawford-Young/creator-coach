@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto'
 import { ObjectId } from 'mongodb'
 import { z } from 'zod'
-import * as Sentry from '@sentry/nextjs'
+import { reportError } from '@/lib/report-error'
 import { collections, type PlatformAccountDoc } from '@/db'
 import { encryptToken } from '@/lib/token-crypto'
 import { logger } from '@/lib/logger'
@@ -205,7 +205,7 @@ export async function handleGoogleCallback(params: HandleGoogleCallbackParams): 
         logger.info({ creatorId, ...result }, 'handleGoogleCallback: backfill complete')
       })
       .catch((error: unknown) => {
-        Sentry.captureException(error)
+        reportError(error)
         logger.warn({ creatorId }, 'handleGoogleCallback: backfill failed')
       })
   }

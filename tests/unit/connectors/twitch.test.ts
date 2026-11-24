@@ -7,11 +7,11 @@ import { collections, type ContentItemDoc, type PlatformAccountDoc } from '@/db'
 import { decryptToken, encryptToken } from '@/lib/token-crypto'
 import { env } from '@/env'
 
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
+vi.mock('@/lib/report-error', () => ({
+  reportError: vi.fn(),
 }))
 
-import * as Sentry from '@sentry/nextjs'
+import { reportError } from '@/lib/report-error'
 import {
   twitchConnector,
   checkLive,
@@ -150,7 +150,7 @@ async function seedContentItem(
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  vi.mocked(Sentry.captureException).mockClear()
+  vi.mocked(reportError).mockClear()
 })
 
 describe('syncChannel', () => {
@@ -320,7 +320,7 @@ describe('syncContent', () => {
     expect(clip2!.title).toBe('Another Great Clip')
   })
 
-  it('malformed item in the list is skipped (Sentry called), well-formed siblings still land', async () => {
+  it('malformed item in the list is skipped (reportError called), well-formed siblings still land', async () => {
     const account = await seedAccount()
     const router = createFetchRouter()
     queueValidateOk(router)
@@ -343,7 +343,7 @@ describe('syncContent', () => {
       externalId: 'vod-bad',
     })
     expect(bad).toBeNull()
-    expect(Sentry.captureException).toHaveBeenCalledTimes(1)
+    expect(reportError).toHaveBeenCalledTimes(1)
   })
 
   it('re-running syncContent on the same fixtures does not create duplicate contentItems', async () => {

@@ -21,11 +21,11 @@ vi.mock('@/lib/connectors/youtube', () => ({
     syncMetrics: vi.fn(),
   },
 }))
-vi.mock('@sentry/nextjs', () => ({
-  captureException: vi.fn(),
+vi.mock('@/lib/report-error', () => ({
+  reportError: vi.fn(),
 }))
 
-import * as Sentry from '@sentry/nextjs'
+import { reportError } from '@/lib/report-error'
 import { twitchConnector } from '@/lib/connectors/twitch'
 import { youtubeConnector } from '@/lib/connectors/youtube'
 import { ReauthRequiredError } from '@/lib/connectors/token-refresh'
@@ -95,7 +95,7 @@ afterEach(async () => {
   vi.mocked(youtubeConnector.syncChannel).mockReset()
   vi.mocked(youtubeConnector.syncContent).mockReset()
   vi.mocked(youtubeConnector.syncMetrics).mockReset()
-  vi.mocked(Sentry.captureException).mockClear()
+  vi.mocked(reportError).mockClear()
   vi.restoreAllMocks()
   if (createdAccountIds.length > 0) {
     await collections().platformAccounts.deleteMany({ _id: { $in: createdAccountIds } })
@@ -184,9 +184,9 @@ describe('runDailyIngest', () => {
     void failing
   })
 
-  it('a ReauthRequiredError account is skipped without re-reporting to Sentry or logger.error', async () => {
+  it('a ReauthRequiredError account is skipped without re-reporting via reportError or logger.error', async () => {
     const account = await seedAccount({ platform: 'twitch' })
-    const sentrySpy = vi.mocked(Sentry.captureException)
+    const reportSpy = vi.mocked(reportError)
     const loggerErrorSpy = vi.spyOn(logger, 'error')
     vi.mocked(twitchConnector.syncChannel).mockImplementationOnce(async () => {
       throw new ReauthRequiredError(account.creatorId, 'twitch')
@@ -196,17 +196,17 @@ describe('runDailyIngest', () => {
 
     const errorRows = summary.filter((row) => !row.ok)
     expect(errorRows).toEqual([{ platform: 'twitch', ok: false, error: 'reauth_required' }])
-    // Sentry/logger mocks are per-test-file module instances (vitest
+    // reportError/logger mocks are per-test-file module instances (vitest
     // isolates module registries per file) — safe to assert "not called"
     // exactly even though the DB itself is shared.
-    expect(sentrySpy).not.toHaveBeenCalled()
+    expect(reportSpy).not.toHaveBeenCalled()
     expect(loggerErrorSpy).not.toHaveBeenCalled()
   })
 
-  it('a non-reauth error is reported to Sentry and logger.error, and siblings still continue', async () => {
+  it('a non-reauth error is reported via reportError and logger.error, and siblings still continue', async () => {
     const failing = await seedAccount({ platform: 'twitch' })
     const ok = await seedAccount({ platform: 'youtube' })
-    const sentrySpy = vi.mocked(Sentry.captureException)
+    const reportSpy = vi.mocked(reportError)
     const loggerErrorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined as never)
     const boom = new Error('boom')
     vi.mocked(twitchConnector.syncChannel).mockImplementationOnce(async () => {
@@ -215,8 +215,8 @@ describe('runDailyIngest', () => {
 
     const summary = await runDailyIngest()
 
-    expect(sentrySpy).toHaveBeenCalledTimes(1)
-    expect(sentrySpy).toHaveBeenCalledWith(boom)
+    expect(reportSpy).toHaveBeenCalledTimes(1)
+    expect(reportSpy).toHaveBeenCalledWith(boom)
     expect(loggerErrorSpy).toHaveBeenCalledTimes(1)
     const errorRows = summary.filter((row) => !row.ok)
     expect(errorRows).toEqual([{ platform: 'twitch', ok: false, error: 'boom' }])

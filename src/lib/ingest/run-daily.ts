@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from 'crypto'
-import * as Sentry from '@sentry/nextjs'
+import { reportError } from '@/lib/report-error'
 import { collections, type Platform, type PlatformAccountDoc } from '@/db'
 import { twitchConnector } from '@/lib/connectors/twitch'
 import { youtubeConnector } from '@/lib/connectors/youtube'
@@ -50,7 +50,7 @@ export function isAuthorizedCronRequest(request: Request): boolean {
  * Runs `action` for every account, isolating failures per account so one
  * broken account never blocks its siblings. `ReauthRequiredError` is never
  * re-reported — token-refresh already flipped the account's status and
- * captured it to Sentry at refresh time; re-capturing here would just be
+ * reported it (reportError) at refresh time; re-capturing here would just be
  * duplicate noise for an already-known condition.
  */
 export async function runIsolated(
@@ -69,7 +69,7 @@ export async function runIsolated(
         summary.push({ platform: account.platform, ok: false, error: 'reauth_required' })
         continue
       }
-      Sentry.captureException(error)
+      reportError(error)
       logger.error({ creatorId: account.creatorId, platform: account.platform }, errorContext)
       summary.push({
         platform: account.platform,

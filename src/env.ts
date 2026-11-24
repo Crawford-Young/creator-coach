@@ -16,10 +16,6 @@ export const env = createEnv({
     AUTH_GOOGLE_SECRET: z.string().min(1),
     TOKEN_ENC_KEY: z.string().min(1),
     CRON_SECRET: z.string().min(1),
-    // Production-only: a missing DSN makes Sentry a no-op locally, and the
-    // auth token is only used for source-map upload at build time in CI.
-    SENTRY_DSN: z.url().optional(),
-    SENTRY_AUTH_TOKEN: z.string().min(1).optional(),
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   },
   client: {
@@ -35,13 +31,11 @@ export const env = createEnv({
     AUTH_GOOGLE_SECRET: process.env.AUTH_GOOGLE_SECRET,
     TOKEN_ENC_KEY: process.env.TOKEN_ENC_KEY,
     CRON_SECRET: process.env.CRON_SECRET,
-    SENTRY_DSN: process.env.SENTRY_DSN,
-    SENTRY_AUTH_TOKEN: process.env.SENTRY_AUTH_TOKEN,
     NODE_ENV: process.env.NODE_ENV,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   },
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
-  // A present-but-empty line in .env (e.g. `SENTRY_AUTH_TOKEN=`) must behave as
+  // A present-but-empty line in .env (e.g. `NEXT_PUBLIC_APP_URL=`) must behave as
   // unset — otherwise optional vars fail their .min(1)/.url() checks on "".
   emptyStringAsUndefined: true,
 })
